@@ -3,8 +3,15 @@
 Adapted from NVIDIA's CUDA-Q hybrid QNN tutorial and extended from the
 1-qubit binary baseline into a 2-qubit multiclass experiment.
 
-v2 Samples increased from 1000 to 2000. Future- adjust to more separable digits (e.g. [0,1,4,7])
+v2 Sample size - Samples increased from 1000 to 2000. 
+v2 Future - adjust to more separable digits (e.g. [0,1,4,7])
 v2 Optimizer adjustments - Optimizer, learning rate, and weight decay.
+v2 Observable depth - 
+
+Per-class analysis revealed that the model completely failed to learn one class, 
+indicating insufficient representational capacity in the current quantum circuit 
+and observable configuration. This suggests that the chosen measurement operators 
+do not provide a sufficiently expressive feature space for multi-class separation.
 
 """
 
@@ -39,7 +46,11 @@ cudaq.set_target("qpp-cpu")
 # cudaq.set_target("nvidia")
 # device = torch.device("cuda:0")
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+#More robust 'Project Root' for MNIST dataset
+PROJECT_ROOT = Path(__file__).resolve()
+while not (PROJECT_ROOT / ".git").exists():
+    PROJECT_ROOT = PROJECT_ROOT.parent
+
 DATA_DIR = PROJECT_ROOT / "data"
 
 
