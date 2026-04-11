@@ -1,7 +1,42 @@
-"""Experiment 1: 2-qubit, 4-class hybrid QNN for MNIST.
+"""
+
+Experiment 1: 2-qubit, 4-class hybrid QNN for MNIST.
 
 Adapted from NVIDIA's CUDA-Q hybrid QNN tutorial and extended from the
 1-qubit binary baseline into a 2-qubit multiclass experiment.
+
+Observations:
+- Performance dropped compared to Experiment 0 (~90% → ~50% accuracy).
+- This degradation is expected due to:
+    1. Increased model complexity (2 qubits → larger Hilbert space)
+    2. Multiclass classification (4 classes vs binary)
+    3. More difficult decision boundaries between digit classes
+
+Analysis:
+- Class distribution across train/test splits was examined and found to be balanced,
+  ruling out class imbalance as the primary cause of poor performance.
+- Per-class accuracy revealed uneven learning:
+    - Some classes (e.g., digit '3') were learned reasonably well
+    - Others (e.g., digit '5') were not learned at all (0% accuracy)
+- This suggests the model is not underfitting globally, but instead struggling with
+  class separability in the current feature space and circuit configuration.
+
+Interpretation:
+- The quantum circuit likely lacks sufficient expressibility or appropriate encoding
+  to distinguish certain digit classes.
+- Optimization dynamics may also be affected by:
+    - High weight decay (0.80)
+    - Limited circuit depth
+    - Parameter initialization sensitivity
+
+Next Steps:
+- Tune optimizer hyperparameters (learning rate, weight decay)
+- Experiment with different digit subsets (e.g., more separable classes)
+- Increase training epochs
+- Modify circuit structure (additional gates / entanglement)
+- Evaluate per-class confusion matrix to identify systematic misclassification patterns
+
+
 """
 
 import cudaq
