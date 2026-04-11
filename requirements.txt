@@ -1,0 +1,7 @@
+cudaq
+torch
+torchvision
+numpy
+scikit-learn
+matplotlib
+jupyter

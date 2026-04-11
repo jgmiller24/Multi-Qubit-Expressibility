@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+env/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data / artifacts (keep repo light)
+data/
+*.pt
+*.pth
+*.ckpt
+*.npz
+
+# Plots (optional: include or ignore)
+# Experiment_0/*.png
+
+# Docker
+*.log
