@@ -46,7 +46,7 @@ multi-qubit-expressibility/
 ### 🔧 Setup Steps
 
 1. Clone the repository:
-git clone https://github.com/YOUR_USERNAME/multi-qubit-expressibility.git
+git clone https://github.com/jgmiller24/multi-qubit-expressibility.git
 cd multi-qubit-expressibility
 
 2. Open the project in VS code
