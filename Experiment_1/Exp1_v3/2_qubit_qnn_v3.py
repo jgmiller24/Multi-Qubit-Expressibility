@@ -1,13 +1,13 @@
-"""Experiment 1: 2-qubit, 4-class hybrid QNN for MNIST.
+"""
+Experiment 1 (v3): 2-qubit, 4-class hybrid QNN with revised observables and increased circuit expressivity.
 
-Adapted from NVIDIA's CUDA-Q hybrid QNN tutorial and extended from the
-1-qubit binary baseline into a 2-qubit multiclass experiment.
+Goal:
+Evaluate whether poor class separation in earlier 2-qubit runs was caused by
+limited observable diversity and shallow circuit structure rather than data imbalance.
 
-v2 Sample size - Samples increased from 1000 to 2000. 
-v2 Future - adjust to more separable digits (e.g. [0,1,4,7])
-v2 Optimizer adjustments - Optimizer, learning rate, and weight decay.
-v2 Observable depth - 
-
+Hypothesis:
+A more expressive circuit and a less redundant observable set should improve
+per-class separation and reduce class collapse.
 """
 
 import cudaq
@@ -142,7 +142,7 @@ grid_img = torchvision.utils.make_grid(
 )
 plt.imshow(grid_img.permute(1, 2, 0))
 plt.axis("off")
-plt.savefig("sample_inputs_exp1v2.png", dpi=200, bbox_inches="tight")
+plt.savefig("sample_inputs_exp1v3.png", dpi=200, bbox_inches="tight")
 plt.close()
 
 class QuantumFunction(Function):
@@ -155,16 +155,19 @@ class QuantumFunction(Function):
         def kernel(qubit_count: int, thetas: np.ndarray):
             qubits = cudaq.qvector(qubit_count)
 
-            # Qubit 0 rotations
+            # Layer 1
             ry(thetas[0], qubits[0])
             rx(thetas[1], qubits[0])
-
-            # Qubit 1 rotations
             ry(thetas[2], qubits[1])
             rx(thetas[3], qubits[1])
 
-            # Entangling gate
             x.ctrl(qubits[0], qubits[1])
+
+            # Layer 2
+            ry(thetas[4], qubits[0])
+            rx(thetas[5], qubits[0])
+            ry(thetas[6], qubits[1])
+            rx(thetas[7], qubits[1])
 
         self.kernel = kernel
         self.qubit_count = qubit_count
@@ -178,8 +181,8 @@ class QuantumFunction(Function):
         hamiltonians = [
             spin.z(0),
             spin.z(1),
-            spin.z(0) + spin.z(1),
-            spin.z(0) - spin.z(1)
+            spin.x(0),
+            spin.x(1)
         ]
 
         outputs = []
@@ -249,7 +252,7 @@ class HybridQNN(nn.Module):
 
         self.fc3 = nn.Linear(128, 64)
         self.fc4 = nn.Linear(64, 32)
-        self.fc5 = nn.Linear(32, 4)   # Four circuit parameters: 2 per qubit
+        self.fc5 = nn.Linear(32, 8)   # eight circuit parameters
 
         self.quantum = QuantumLayer(qubit_count, shift)
 
@@ -347,9 +350,9 @@ sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
             xticklabels=target_digits, yticklabels=target_digits)
 plt.xlabel("Predicted Digit")
 plt.ylabel("True Digit")
-plt.title("Experiment 1 (v2) Confusion Matrix")
+plt.title("Experiment 1 (v3) Confusion Matrix")
 plt.tight_layout()
-plt.savefig("experiment1v2_confusion_matrix.png", dpi=200)
+plt.savefig("experiment1v3_confusion_matrix.png", dpi=200)
 plt.close()
 
 plt.figure(figsize=(10, 5))
@@ -370,5 +373,5 @@ plt.legend()
 plt.title("Accuracy")
 
 plt.tight_layout()
-plt.savefig("experiment1v2_metrics.png", dpi=200)
+plt.savefig("experiment1v3_metrics.png", dpi=200)
 plt.close()
