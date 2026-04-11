@@ -1,0 +1,60 @@
+Final Project Proposal
+Multi-Qubit Expressibility Study
+Hybrid Quantum Neural Networks for MNIST Classification
+Overview
+This proposal presents a final project rooted in NVIDIA CUDA-Q's hybrid quantum neural network tutorial. The project extends the existing single-qubit binary MNIST classifier into a multi-qubit architecture capable of classifying progressively larger subsets of the MNIST digit space on a single simulated QPU. The central premise is that qubit count should directly govern the number of classifiable output states: 1 qubit yields 2 states for 2-class classification, 2 qubits yield 4 states for 4-class classification, and 3 qubits yield 8 states for 8-class classification. This state-space-motivated scaling provides a principled experimental framework for studying quantum circuit expressibility as a function of qubit count within a hybrid classical-quantum architecture.
+
+All experiments run on a single QPU, keeping the architecture self-contained and executable on local hardware. The foundational stack is CUDA-Q for quantum circuit execution and PyTorch for classical neural network layers with gradient computation via the parameter shift rule.
+Motivation
+The CUDA-Q hybrid QNN tutorial establishes a minimal but complete hybrid architecture: a classical fully connected network compresses 28x28 MNIST images down to 2 variational parameters, which feed a single-qubit circuit performing Ry and Rx rotations. The expectation value of spin.z(0) is passed through a sigmoid activation to produce a binary classification decision between digits 5 and 6.
+
+This design deliberately limits the quantum layer to one qubit and one output class boundary. The research question this project investigates is whether scaling the qubit count according to the binary representation of output classes, where n qubits encode 2^n possible states, allows the quantum layer to take on meaningful multi-class classification responsibility without abandoning the single-QPU constraint. This framing connects quantum circuit expressibility directly to classification capacity, rather than treating additional qubits as a general-purpose complexity boost.
+Technical Approach
+Experiment 0: Baseline Replication (1 Qubit, 2 Classes)
+Replicate the tutorial exactly as written: 1 qubit with Ry and Rx gates, spin.z(0) as the measurement Hamiltonian, sigmoid output for binary classification of digits 5 vs. 6 on 1,000 samples. This establishes the performance baseline against which all subsequent configurations are measured.
+Experiment 1: 2-Qubit Circuit (4 States, 4 Classes)
+Expand the quantum layer to 2 qubits with an entangling CNOT gate between them. The 2-qubit system spans 4 computational basis states, motivating classification across 4 digit classes. The classical fc5 layer is adjusted to output 4 variational parameters (2 rotation angles per qubit). The measurement Hamiltonian is extended to a 2-qubit observable such as spin.z(0) + spin.z(1), and the combined output is decoded into one of 4 class labels. The dataset is updated to include 4 target digit classes with balanced sampling.
+
+Experiment 2: 3-Qubit Circuit (8 States, 8 Classes)
+Extend to 3 qubits with a ladder entanglement structure using CNOT gates between q0 and q1 and between q1 and q2. The 3-qubit system spans 8 computational basis states, supporting classification across 8 digit classes. Six variational parameters feed from the classical layer. The Hamiltonian and output decoding are scaled accordingly. The dataset is updated to include 8 target digit classes, leaving 2 MNIST digits unclassified as a deliberate trade-off for qubit count simplicity.
+
+Gradient Computation
+All three circuit configurations use the parameter shift rule implemented in the tutorial's QuantumFunction.backward() method. Expanding to 2 or 3 qubits requires no change to the gradient engine beyond widening the parameter dimension. The shift magnitude remains pi divided by 2 throughout all experiments.
+
+Architecture Modifications Summary
+Baseline	1 qubit, 2 classes, 2 variational params
+Experiment 1	2 qubits, 4 classes, 4 params, 1 CNOT
+Experiment 2	3 qubits, 8 classes, 6 params, 2 CNOTs (ladder)
+Classical layers	Unchanged: 28x28 to 256 to 128 to 64 to 32 to n params
+Loss function	Cross-entropy for multi-class (replacing BCE)
+Output activation	Softmax over decoded expectation values
+Backend	qpp-cpu (CPU simulation); nvidia target for GPU acceleration
+Deliverables
+•	Replicated 1-qubit baseline with documented training and test curves
+•	2-qubit CUDA-Q circuit implementation with 4-class MNIST classification
+•	3-qubit CUDA-Q circuit implementation with 8-class MNIST classification
+•	Comparative accuracy and loss plots across all three configurations
+•	Analysis of expressibility vs. trainability trade-off as qubit count and class count scale together
+•	Discussion of barren plateau risk and observed gradient behavior across configurations
+•	Reproducible Python code or Jupyter notebook with environment setup instructions
+•	Written report documenting methodology, results, and conclusions
+Expected Outcomes
+The hypothesis is that the 2-qubit 4-class configuration will demonstrate meaningful classification accuracy above a random baseline of 25%, validating that entanglement-based state space expansion can carry multi-class classification signal through a hybrid architecture. The 3-qubit 8-class configuration is expected to be more challenging to train due to increased circuit depth and the larger output space, and may exhibit barren plateau effects that manifest as gradient vanishing and slow convergence.
+
+Documenting this trade-off empirically is a core contribution of the project, as it directly informs how quantum circuit depth and qubit count should be chosen relative to classification task complexity in hybrid quantum-classical systems. The project does not aim to outperform classical MNIST benchmarks. The scientific value lies in characterizing the relationship between quantum state space, circuit expressibility, and multi-class classification capacity within the CUDA-Q hybrid QNN framework.
+Timeline
+Week 1	Baseline replication and validation; 2-qubit circuit implementation and initial training runs on 4-class MNIST
+Week 2	3-qubit circuit implementation and training runs on 8-class MNIST; gradient and accuracy data collection across all configurations
+Week 3	Comparative analysis, result visualization, written report drafting, and final code cleanup
+Technical Stack
+•	NVIDIA CUDA-Q 0.7.1 (Python API)
+•	PyTorch 2.2.2 with torchvision 0.17.0
+•	scikit-learn 1.4.2 for train/test splitting
+•	matplotlib 3.8.4 for result visualization
+•	MNIST dataset via torchvision datasets
+•	Backend: qpp-cpu (CPU simulation); nvidia target for GPU acceleration if available
+
+
+
+References
+NVIDIA Corporation. (2024). Hybrid Quantum Neural Networks. CUDA-Q Documentation, Version 0.7.1. https://nvidia.github.io/cuda-quantum/0.7.1/examples/python/tutorials/hybrid_qnns.html

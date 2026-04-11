@@ -1,16 +1,19 @@
 {
   "name": "cudaq-multi-qubit",
   "build": {
-    "dockerfile": "Dockerfile"
+    "dockerfile": "Dockerfile",
+    "context": ".."
   },
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
         "ms-toolsai.jupyter"
-      ]
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python"
+      }
     }
   },
-  "postCreateCommand": "python -m pip install --upgrade certifi",
-  "remoteUser": "root"
+  "remoteUser": "vscode"
 }

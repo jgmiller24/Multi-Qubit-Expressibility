@@ -100,7 +100,7 @@ grid_img = torchvision.utils.make_grid(x_train[:10],
                                        normalize=True)
 plt.imshow(grid_img.permute(1, 2, 0))
 plt.axis('off')
-plt.show()
+plt.savefig("sample_inputs_Exp0.png")
 
 class QuantumFunction(Function):
     """Allows the quantum circuit to input data, output expectation values
