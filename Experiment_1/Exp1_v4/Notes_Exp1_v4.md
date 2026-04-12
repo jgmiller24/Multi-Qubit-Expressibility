@@ -44,3 +44,6 @@ rather than insufficient circuit depth.
 - Explore 3-qubit architectures
 - Investigate hybrid architectures with stronger classical feature extraction
 
+#### Amendment 1
+- Previously stated conclusion proved to be unjustified.
+- See Exp1_v4b Notes.

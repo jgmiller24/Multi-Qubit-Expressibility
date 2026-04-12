@@ -11,6 +11,7 @@ v2 Observable depth -
 """
 
 import cudaq
+from cudaq import spin
 
 import matplotlib.pyplot as plt
 import numpy as np
