@@ -11,7 +11,6 @@ per-class separation and reduce class collapse.
 """
 
 import cudaq
-from cudaq import *
 
 import matplotlib.pyplot as plt
 import numpy as np

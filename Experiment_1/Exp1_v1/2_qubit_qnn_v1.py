@@ -8,7 +8,6 @@ Adapted from NVIDIA's CUDA-Q hybrid QNN tutorial and extended from the
 """
 
 import cudaq
-from cudaq import *
 
 import matplotlib.pyplot as plt
 import numpy as np

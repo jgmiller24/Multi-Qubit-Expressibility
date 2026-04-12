@@ -12,7 +12,6 @@ between visually similar digits.
 """
 
 import cudaq
-from cudaq import *
 
 import matplotlib.pyplot as plt
 import numpy as np
