@@ -262,7 +262,7 @@ class HybridQNN(nn.Module):
 
         self.fc3 = nn.Linear(128, 64)
         self.fc4 = nn.Linear(64, 32)
-        self.fc5 = nn.Linear(32, 12)   # eight circuit parameters
+        self.fc5 = nn.Linear(32, 12)   # twelve circuit parameters
 
         self.quantum = QuantumLayer(qubit_count, shift)
 
