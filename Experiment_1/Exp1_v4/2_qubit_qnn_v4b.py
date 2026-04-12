@@ -143,7 +143,7 @@ grid_img = torchvision.utils.make_grid(
 )
 plt.imshow(grid_img.permute(1, 2, 0))
 plt.axis("off")
-plt.savefig("sample_inputs_exp1v4.png", dpi=200, bbox_inches="tight")
+plt.savefig("sample_inputs_exp1v4b.png", dpi=200, bbox_inches="tight")
 plt.close()
 
 class QuantumFunction(Function):
@@ -361,9 +361,9 @@ sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
             xticklabels=target_digits, yticklabels=target_digits)
 plt.xlabel("Predicted Digit")
 plt.ylabel("True Digit")
-plt.title("Experiment 1 (v4) Confusion Matrix")
+plt.title("Experiment 1 (v4b) Confusion Matrix")
 plt.tight_layout()
-plt.savefig("experiment1v4_confusion_matrix.png", dpi=200)
+plt.savefig("experiment1v4b_confusion_matrix.png", dpi=200)
 plt.close()
 
 plt.figure(figsize=(10, 5))
@@ -384,5 +384,5 @@ plt.legend()
 plt.title("Accuracy")
 
 plt.tight_layout()
-plt.savefig("experiment1v4_metrics.png", dpi=200)
+plt.savefig("experiment1v4b_metrics.png", dpi=200)
 plt.close()

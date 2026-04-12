@@ -1,14 +1,20 @@
 """
-Experiment 1 (v4): 2-qubit, 4-class hybrid QNN with increased circuit depth.
+Experiment 1 (v5): 2-qubit, 4-class hybrid QNN with revised observables.
 
 Goal:
-Test whether adding an additional entanglement + rotation block improves
-class separability and overall performance relative to v3.
+Revert to the v3 circuit and isolate the effect of observable design on
+multiclass performance.
+
+Rationale:
+Experiment 1 (v4) increased circuit depth but did not improve performance,
+suggesting that circuit depth alone is not the primary bottleneck.
+This version keeps the shallower v3 circuit and changes only the measurement
+operators, allowing observable choice to be evaluated directly.
 
 Hypothesis:
-If the main limitation in earlier runs was insufficient circuit expressivity,
-then increasing depth should improve per-class learning and reduce confusion
-between visually similar digits.
+If observable design is a major limitation, then replacing the previous
+measurement set with more informative correlation-aware observables should
+improve class separability and per-class balance without increasing circuit depth.
 """
 
 import cudaq
@@ -29,6 +35,7 @@ from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
 
 from pathlib import Path
+from tqdm import trange
 
 # Reproducibility
 torch.manual_seed(22)
@@ -143,7 +150,7 @@ grid_img = torchvision.utils.make_grid(
 )
 plt.imshow(grid_img.permute(1, 2, 0))
 plt.axis("off")
-plt.savefig("sample_inputs_exp1v4.png", dpi=200, bbox_inches="tight")
+plt.savefig("sample_inputs_Exp1_v5b.png", dpi=200, bbox_inches="tight")
 plt.close()
 
 class QuantumFunction(Function):
@@ -162,7 +169,6 @@ class QuantumFunction(Function):
             ry(thetas[2], qubits[1])
             rx(thetas[3], qubits[1])
 
-            # Entanglement 1
             x.ctrl(qubits[0], qubits[1])
 
             # Layer 2
@@ -170,15 +176,6 @@ class QuantumFunction(Function):
             rx(thetas[5], qubits[0])
             ry(thetas[6], qubits[1])
             rx(thetas[7], qubits[1])
-
-            # Entanglement 2
-            x.ctrl(qubits[0], qubits[1])
-
-            # Layer 3
-            ry(thetas[8], qubits[0])
-            rx(thetas[9], qubits[0])
-            ry(thetas[10], qubits[1])
-            rx(thetas[11], qubits[1])
 
         self.kernel = kernel
         self.qubit_count = qubit_count
@@ -192,9 +189,9 @@ class QuantumFunction(Function):
         hamiltonians = [
             spin.z(0),
             spin.z(1),
-            spin.x(0),
-            spin.x(1)
-        ]
+            spin.z(0) * spin.z(1),
+            spin.x(0) * spin.x(1)
+        ]   
 
         outputs = []
         for H in hamiltonians:
@@ -263,7 +260,7 @@ class HybridQNN(nn.Module):
 
         self.fc3 = nn.Linear(128, 64)
         self.fc4 = nn.Linear(64, 32)
-        self.fc5 = nn.Linear(32, 12)   # twelve circuit parameters
+        self.fc5 = nn.Linear(32, 8)   # eight circuit parameters
 
         self.quantum = QuantumLayer(qubit_count, shift)
 
@@ -312,8 +309,10 @@ testing_cost = []
 training_accuracy = []
 testing_accuracy = []
 
+epoch_bar = trange(epochs, desc="Training", leave=True)
+
 hybrid_model.train()
-for epoch in range(epochs):
+for epoch in epoch_bar:
     optimizer.zero_grad()
 
     y_hat_train = hybrid_model(x_train).to(device)
@@ -322,7 +321,8 @@ for epoch in range(epochs):
     train_cost.backward()
     optimizer.step()
 
-    training_accuracy.append(accuracy_score(y_train, y_hat_train))
+    train_acc = accuracy_score(y_train, y_hat_train)
+    training_accuracy.append(train_acc)
     training_cost.append(train_cost.item())
 
     hybrid_model.eval()
@@ -330,16 +330,22 @@ for epoch in range(epochs):
         y_hat_test = hybrid_model(x_test).to(device)
         test_cost = loss_function(y_hat_test, y_test).to(device)
 
-        testing_accuracy.append(accuracy_score(y_test, y_hat_test))
+        test_acc = accuracy_score(y_test, y_hat_test)
+        testing_accuracy.append(test_acc)
         testing_cost.append(test_cost.item())
 
-    print(
-        f"Epoch {epoch + 1}/{epochs} | "
-        f"Train Loss: {train_cost.item():.4f} | "
-        f"Test Loss: {test_cost.item():.4f} | "
-        f"Train Acc: {training_accuracy[-1]:.4f} | "
-        f"Test Acc: {testing_accuracy[-1]:.4f}"
-    )
+    epoch_bar.set_postfix({
+        "train_loss": f"{train_cost.item():.4f}",
+        "test_loss": f"{test_cost.item():.4f}",
+        "train_acc": f"{train_acc:.4f}",
+        "test_acc": f"{test_acc:.4f}"
+    })
+
+print("\nFinal metrics:")
+print(f"Train Loss: {training_cost[-1]:.4f}")
+print(f"Test Loss:  {testing_cost[-1]:.4f}")
+print(f"Train Acc:  {training_accuracy[-1]:.4f}")
+print(f"Test Acc:   {testing_accuracy[-1]:.4f}")
 
 hybrid_model.eval()
 with torch.no_grad():
@@ -361,9 +367,9 @@ sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
             xticklabels=target_digits, yticklabels=target_digits)
 plt.xlabel("Predicted Digit")
 plt.ylabel("True Digit")
-plt.title("Experiment 1 (v4) Confusion Matrix")
+plt.title("Experiment 1 (v5b) Confusion Matrix")
 plt.tight_layout()
-plt.savefig("experiment1v4_confusion_matrix.png", dpi=200)
+plt.savefig("experiment1v5b_confusion_matrix.png", dpi=200)
 plt.close()
 
 plt.figure(figsize=(10, 5))
@@ -384,5 +390,5 @@ plt.legend()
 plt.title("Accuracy")
 
 plt.tight_layout()
-plt.savefig("experiment1v4_metrics.png", dpi=200)
+plt.savefig("experiment1v5b_metrics.png", dpi=200)
 plt.close()
