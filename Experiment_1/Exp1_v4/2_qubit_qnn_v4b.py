@@ -1,14 +1,14 @@
 """
-Experiment 1 (v4): 2-qubit, 4-class hybrid QNN with increased circuit depth.
+Experiment 1 (v4b): 2-qubit, 4-class hybrid QNN with increased training duration.
 
-Goal:
-Test whether adding an additional entanglement + rotation block improves
-class separability and overall performance relative to v3.
+Objective:
+Evaluate whether extending training (200 → 400 epochs) enables deeper circuits
+to realize their representational potential.
 
 Hypothesis:
-If the main limitation in earlier runs was insufficient circuit expressivity,
-then increasing depth should improve per-class learning and reduce confusion
-between visually similar digits.
+If prior performance limitations were due to insufficient training rather than
+model capacity, then increasing the number of epochs should improve convergence,
+enhance per-class accuracy, and reduce misclassification between similar digits.
 """
 
 import cudaq

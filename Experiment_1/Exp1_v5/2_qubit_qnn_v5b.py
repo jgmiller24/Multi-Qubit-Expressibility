@@ -1,20 +1,20 @@
 """
-Experiment 1 (v5): 2-qubit, 4-class hybrid QNN with revised observables.
+Experiment 1 (v5b): 2-qubit, 4-class hybrid QNN with revised observables.
 
-Goal:
-Revert to the v3 circuit and isolate the effect of observable design on
-multiclass performance.
+Objective:
+Isolate the impact of observable design on multiclass classification performance
+by reverting to the v3 circuit and modifying only the measurement operators.
 
 Rationale:
-Experiment 1 (v4) increased circuit depth but did not improve performance,
-suggesting that circuit depth alone is not the primary bottleneck.
-This version keeps the shallower v3 circuit and changes only the measurement
-operators, allowing observable choice to be evaluated directly.
+Previous results (v4) showed that increasing circuit depth alone did not improve
+performance, suggesting that circuit complexity is not the primary bottleneck.
+This experiment evaluates whether more informative observables can improve
+class separability without increasing circuit depth.
 
 Hypothesis:
-If observable design is a major limitation, then replacing the previous
-measurement set with more informative correlation-aware observables should
-improve class separability and per-class balance without increasing circuit depth.
+If observable design is a limiting factor, then replacing the original measurement
+set with correlation-aware observables should improve per-class accuracy and
+overall classification performance without requiring additional circuit depth.
 """
 
 import cudaq
