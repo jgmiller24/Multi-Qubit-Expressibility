@@ -28,6 +28,14 @@ multi-qubit-expressibility/
 │ ├── baseline_qnn.py
 │ └── experiment0_metrics.png
 │
+├──Experiment_1/
+│ ├── Exp1_v1/
+│ ├── Exp1_v2/
+│ ├── Exp1_v3/
+│ ├── Exp1_v4/
+│ ├── Exp1_v5/
+│ └── Exp1_v6/
+│
 ├── requirements.txt
 └── README.md
 
@@ -49,7 +57,8 @@ multi-qubit-expressibility/
 git clone https://github.com/jgmiller24/multi-qubit-expressibility.git
 cd multi-qubit-expressibility
 
-2. Open the project in VS code
+2. Open the project in VS code:
+code .
 
 3. Rebuild the container:
 ctl + shift + P --> Dev Containers: Rebuild and Reopen in Container.
