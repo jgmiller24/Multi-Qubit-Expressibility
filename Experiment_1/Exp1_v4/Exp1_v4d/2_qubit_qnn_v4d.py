@@ -29,10 +29,14 @@ from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
 
 from pathlib import Path
+from tqdm import trange
 
 # Reproducibility
 torch.manual_seed(22)
 cudaq.set_random_seed(44)
+
+#Verify CUDA availability
+print("CUDA available:", torch.cuda.is_available())
 
 # Run on CPU for baseline stability/debugging
 device = torch.device("cpu")
@@ -312,8 +316,10 @@ testing_cost = []
 training_accuracy = []
 testing_accuracy = []
 
+epoch_bar = trange(epochs, desc="Training", leave=True)
+
 hybrid_model.train()
-for epoch in range(epochs):
+for epoch in epoch_bar:
     optimizer.zero_grad()
 
     y_hat_train = hybrid_model(x_train).to(device)
@@ -322,7 +328,8 @@ for epoch in range(epochs):
     train_cost.backward()
     optimizer.step()
 
-    training_accuracy.append(accuracy_score(y_train, y_hat_train))
+    train_acc = accuracy_score(y_train, y_hat_train)
+    training_accuracy.append(train_acc)
     training_cost.append(train_cost.item())
 
     hybrid_model.eval()
@@ -330,16 +337,22 @@ for epoch in range(epochs):
         y_hat_test = hybrid_model(x_test).to(device)
         test_cost = loss_function(y_hat_test, y_test).to(device)
 
-        testing_accuracy.append(accuracy_score(y_test, y_hat_test))
+        test_acc = accuracy_score(y_test, y_hat_test)
+        testing_accuracy.append(test_acc)
         testing_cost.append(test_cost.item())
 
-    print(
-        f"Epoch {epoch + 1}/{epochs} | "
-        f"Train Loss: {train_cost.item():.4f} | "
-        f"Test Loss: {test_cost.item():.4f} | "
-        f"Train Acc: {training_accuracy[-1]:.4f} | "
-        f"Test Acc: {testing_accuracy[-1]:.4f}"
-    )
+    epoch_bar.set_postfix({
+        "train_loss": f"{train_cost.item():.4f}",
+        "test_loss": f"{test_cost.item():.4f}",
+        "train_acc": f"{train_acc:.4f}",
+        "test_acc": f"{test_acc:.4f}"
+    })
+
+print("\nFinal metrics:")
+print(f"Train Loss: {training_cost[-1]:.4f}")
+print(f"Test Loss:  {testing_cost[-1]:.4f}")
+print(f"Train Acc:  {training_accuracy[-1]:.4f}")
+print(f"Test Acc:   {testing_accuracy[-1]:.4f}")
 
 hybrid_model.eval()
 with torch.no_grad():

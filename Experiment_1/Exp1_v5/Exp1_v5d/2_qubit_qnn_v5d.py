@@ -51,6 +51,9 @@ from tqdm import trange
 torch.manual_seed(22)
 cudaq.set_random_seed(44)
 
+#Verify CUDA availability
+print("CUDA available:", torch.cuda.is_available())
+
 # Run on CPU for baseline stability/debugging
 device = torch.device("cpu")
 cudaq.set_target("qpp-cpu")
