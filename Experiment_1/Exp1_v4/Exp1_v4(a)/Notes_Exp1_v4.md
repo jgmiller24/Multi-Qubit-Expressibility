@@ -44,6 +44,6 @@ rather than insufficient circuit depth.
 - Explore 3-qubit architectures
 - Investigate hybrid architectures with stronger classical feature extraction
 
-#### Amendment 1
-- Previously stated conclusion proved to be unjustified.
-- See Exp1_v4b Notes.
+### Amendment (Post v4b/v4c/v4d):
+- Initial conclusion that circuit depth was ineffective was due to insufficient training.
+- When trained for extended epochs (400–1000), deeper circuits significantly improve performance.

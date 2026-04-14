@@ -38,3 +38,8 @@
 ### Next Steps:
 - Increase qubit count (3-qubit system) to expand Hilbert space
 - Evaluate whether additional qubits improve class separability and raise performance ceiling
+
+### Amendment (Post v5d):
+- The ~80% performance ceiling observed at 600 epochs was not final
+- Extended training to 1000 epochs (v5d) improved accuracy to ~88–90%
+- Indicates delayed convergence rather than representational limitation

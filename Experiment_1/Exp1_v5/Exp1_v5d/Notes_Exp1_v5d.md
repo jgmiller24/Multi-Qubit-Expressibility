@@ -38,8 +38,8 @@ training or representational constraints.
 
 
 ### Revised Conclusion
-- The primary limitation in earlier experiments was **insufficient training duration**, not
-  limited representational capacity
+- Representational capacity of the 2-qubit system is sufficient for this task,
+  but requires extended training to fully utilize
 - The 2-qubit hybrid QNN can achieve ~88–90% accuracy on this 4-class MNIST task
 - Optimization time is a critical factor in hybrid quantum-classical models
 

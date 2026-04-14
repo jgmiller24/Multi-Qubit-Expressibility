@@ -21,7 +21,9 @@
 
 ### Key Observation:
 - Increasing training duration enabled deeper circuits to realize their full representational capacity
-- Performance gains plateaued despite continued training beyond ~500 epochs
+- Initial plateau observed around ~500 epochs
+- However, extended training (v4d) revealed continued improvement beyond this point,
+  with final convergence occurring closer to ~800–1000 epochs
 
 ---
 
