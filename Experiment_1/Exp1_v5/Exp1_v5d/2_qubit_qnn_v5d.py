@@ -1,5 +1,5 @@
 """
-Experiment 1 (v6): 2-qubit, 4-class hybrid QNN with revised observables – EPOCHS = 1000
+Experiment 1 (v5d): 2-qubit, 4-class hybrid QNN with revised observables - EPOCHS = 1000
 
 Objective:
 Evaluate full convergence behavior of the 2-qubit model using optimized observables.
@@ -17,7 +17,7 @@ Previous experiments showed:
 - v4/v4b/v4c: Increased circuit depth improves performance when sufficiently trained
 - v5/v5b/v5c: Improved observables provide more efficient performance gains
 
-Both approaches converged to a similar accuracy range (~75–80%),
+Both approaches converged to a similar accuracy range (~75-80%),
 suggesting a potential representational limit.
 
 Hypothesis:
@@ -160,7 +160,7 @@ grid_img = torchvision.utils.make_grid(
 )
 plt.imshow(grid_img.permute(1, 2, 0))
 plt.axis("off")
-plt.savefig("sample_inputs_Exp1_v6.png", dpi=200, bbox_inches="tight")
+plt.savefig("sample_inputs_Exp1_v5d.png", dpi=200, bbox_inches="tight")
 plt.close()
 
 class QuantumFunction(Function):
@@ -377,9 +377,9 @@ sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
             xticklabels=target_digits, yticklabels=target_digits)
 plt.xlabel("Predicted Digit")
 plt.ylabel("True Digit")
-plt.title("Experiment 1 (v6) Confusion Matrix")
+plt.title("Experiment 1 (v5d) Confusion Matrix")
 plt.tight_layout()
-plt.savefig("experiment1v6_confusion_matrix.png", dpi=200)
+plt.savefig("experiment1v5d_confusion_matrix.png", dpi=200)
 plt.close()
 
 plt.figure(figsize=(10, 5))
@@ -400,5 +400,5 @@ plt.legend()
 plt.title("Accuracy")
 
 plt.tight_layout()
-plt.savefig("experiment1v6_metrics.png", dpi=200)
+plt.savefig("experiment1v5d_metrics.png", dpi=200)
 plt.close()
