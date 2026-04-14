@@ -1,5 +1,5 @@
 
-## Experiment 1 (v6): Full Convergence – EPOCHS = 1000
+## Experiment 1 (v5d): Full Convergence – EPOCHS = 1000
 
 ### Objective
 Evaluate full convergence behavior of the 2-qubit hybrid QNN using optimized observables,
