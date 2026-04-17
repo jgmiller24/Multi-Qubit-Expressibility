@@ -65,6 +65,7 @@ while not (PROJECT_ROOT / ".git").exists():
     PROJECT_ROOT = PROJECT_ROOT.parent
 
 DATA_DIR = PROJECT_ROOT / "data"
+CHECKPOINT_PATH = Path(__file__).parent / "exp2_v3_checkpoint.pth"
 
 
 def prepare_data(target_digits, sample_count, test_size):
@@ -131,7 +132,7 @@ def print_class_distribution(y, name):
 
 
 # Experiment parameters
-sample_count = 4000         # Increased class count = increased sample count
+sample_count = 2000         # Reduced from 4000; 4000-sample run OOM-killed at epoch 446/1000 after 3h35m
 target_digits = [1, 2, 3, 4, 5, 6, 7, 8]   # Eight MNIST classes for Experiment 2
 test_size = 30
 epochs = 1000   # Extended training time (up from 600 in v2) ***
@@ -326,7 +327,19 @@ testing_cost = []
 training_accuracy = []
 testing_accuracy = []
 
-epoch_bar = trange(epochs, desc="Training", leave=True)
+start_epoch = 0
+if CHECKPOINT_PATH.exists():
+    checkpoint = torch.load(CHECKPOINT_PATH, map_location=device)
+    hybrid_model.load_state_dict(checkpoint["model_state"])
+    optimizer.load_state_dict(checkpoint["optimizer_state"])
+    start_epoch = checkpoint["epoch"] + 1
+    training_cost = checkpoint["training_cost"]
+    testing_cost = checkpoint["testing_cost"]
+    training_accuracy = checkpoint["training_accuracy"]
+    testing_accuracy = checkpoint["testing_accuracy"]
+    print(f"\nResuming from checkpoint at epoch {start_epoch}/{epochs}")
+
+epoch_bar = trange(start_epoch, epochs, desc="Training", leave=True)
 
 hybrid_model.train()
 for epoch in epoch_bar:
@@ -357,6 +370,17 @@ for epoch in epoch_bar:
         "train_acc": f"{train_acc:.4f}",
         "test_acc": f"{test_acc:.4f}"
     })
+
+    if (epoch + 1) % 50 == 0:
+        torch.save({
+            "epoch": epoch,
+            "model_state": hybrid_model.state_dict(),
+            "optimizer_state": optimizer.state_dict(),
+            "training_cost": training_cost,
+            "testing_cost": testing_cost,
+            "training_accuracy": training_accuracy,
+            "testing_accuracy": testing_accuracy,
+        }, CHECKPOINT_PATH)
 
 print("\nFinal metrics:")
 print(f"Train Loss: {training_cost[-1]:.4f}")

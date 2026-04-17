@@ -21,6 +21,16 @@ or whether the circuit has already converged — establishing a clean baseline b
 adding circuit depth in v4.
 
 
+### Run History:
+
+| Attempt | sample_count | Outcome |
+|---------|-------------|---------|
+| v3 initial | 4000 | OOM-killed by OS at epoch 446/1000 after 3h 35m |
+| v3 current | 2000 | Reduced to allow full 1000-epoch CPU run to complete |
+
+**Memory optimization note:** The 4000-sample run was terminated by the OS memory manager at epoch 446/1000 (after ~3 hours 35 minutes of CPU training). `sample_count` has been reduced to 2000 to lower per-epoch memory pressure and allow the full 1000-epoch run to complete without hitting the OOM limit.
+
+
 ### Results Summary:
 - Test accuracy: [TBD]
 - Comparison to v2 (~45–46%): [TBD]
