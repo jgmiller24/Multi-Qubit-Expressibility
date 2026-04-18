@@ -500,10 +500,13 @@ class QuantumCircuitRunner:
         Because the observable count is matched to the class count, the output
         can be used directly as the logits for multiclass classification.
         """
+        # Convert the input tensor to a NumPy array for CUDA-Q, and batch qubits
         theta_np = theta_vals.detach().cpu().numpy()
         batch_qubits = [self.qubit_count] * theta_np.shape[0]
 
         outputs = []
+
+        # For each observable, run the circuit on the full batch of parameter sets and collect the expectation values.
         for hamiltonian in self.hamiltonians:
             results = cudaq.observe(self.kernel, hamiltonian, batch_qubits, theta_np)
             outputs.append(
@@ -581,15 +584,19 @@ class QuantumAutograd(Function):
             Instead of 2 * P separate quantum runs, build all shifted parameter sets
             in two large batches and call the circuit runner only twice.
         """
+        # Create identity matrix to add/subtract shift to each parameter independently
         eye = torch.eye(param_count, device=thetas.device, dtype=thetas.dtype).unsqueeze(0)
         theta_expanded = thetas.unsqueeze(1)  # (B, 1, P)
 
+        # Construct the +shift and -shift parameter sets for all parameters
         plus = (theta_expanded + shift * eye).reshape(batch_size * param_count, param_count)
         minus = (theta_expanded - shift * eye).reshape(batch_size * param_count, param_count)
 
+        # Evaluate the circuit on all shifted parameter sets in two large batches
         exp_plus = ctx.runner.run(plus).reshape(batch_size, param_count, -1)
         exp_minus = ctx.runner.run(minus).reshape(batch_size, param_count, -1)
 
+        # Compute the parameter-shift gradient for each parameter and sample
         deriv = (exp_plus - exp_minus) / (2.0 * shift)  # (B, P, O)
         grad_thetas = (grad_output.unsqueeze(1) * deriv).sum(dim=2)  # (B, P)
 
