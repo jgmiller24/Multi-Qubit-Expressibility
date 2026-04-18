@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
 
 # Environment settings
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -7,6 +7,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # System dependencies
 RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3-pip \
+    python-is-python3 \
     git \
     curl \
     build-essential \
