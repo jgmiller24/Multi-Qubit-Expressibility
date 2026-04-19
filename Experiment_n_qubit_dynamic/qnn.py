@@ -1,13 +1,36 @@
+"""
+Course: Quantum Computing - CS-5463-907
+Term: Spring 2026
+Group: Quantum Machine Learning Group 2 
+Project: Multi-Qubit Expressibility
+Authors: Devin Marinelli, Jonathan Miller, John Schneider, Keeban Villarreal
+
+Project Summary:
+This project explores the expressibility of variational quantum circuits as the number of qubits 
+increases. We implement a hybrid classical-quantum neural network (QNN) for classifying subsets of 
+the MNIST dataset. The quantum component consists of a parameterized circuit with local rotations 
+and nearest-neighbor entanglement, and a structured set of observables that serve as quantum 
+features. The classical front end learns to generate sample-specific circuit angles, and a final 
+linear readout layer maps the quantum features to class logits.
+"""
+
+# General purpose imports
 import math
 from pathlib import Path
 import os
 import sys
 import time
 import random
+import copy
+import argparse
+from tqdm import trange, tqdm
+from typing import Optional
+
+# Interrupt handling imports
 import signal
 import atexit
-import copy
 
+# Quantum and machine learning imports
 import cudaq
 from cudaq import spin
 import matplotlib.pyplot as plt
@@ -20,16 +43,17 @@ from sklearn.model_selection import train_test_split
 from torch.autograd import Function
 from torch.utils.data import DataLoader, Dataset
 from torchvision import datasets, transforms
-from tqdm import trange, tqdm
 
 # -----------------------------------------------------------------------------
-# Interrupt Handler
+# Interrupt Handling Setup
 # -----------------------------------------------------------------------------
+# SIGINT handler
 def handle_sigint(signum, frame):
     global STOP_REQUESTED
     STOP_REQUESTED = True
     print("\nCtrl+C received. Stopping after current batch...")
 
+# Cleanup function to be called on exit
 def cleanup():
     try:
         if torch.cuda.is_available():
@@ -38,13 +62,33 @@ def cleanup():
         pass
 
 # -----------------------------------------------------------------------------
-# Reproducibility
+# Global Config
 # -----------------------------------------------------------------------------
-SEED_CUDAQ = 44
-cudaq.set_random_seed(SEED_CUDAQ)
+# Quantum circuit settings
+SHIFT = math.pi / 2
 
+# Class value presets for MNIST
+PRESETS={1: [5, 6],
+         2: [3, 4, 5, 6],
+         3: [1, 2, 3, 4, 5, 6, 7, 8]}
+
+# Training Hyperparameters
+TEST_SIZE_PCT = 30
+
+# Device and Determinism Settings
+SET_DETERMINISTIC = True
+SEED_CUDAQ = 44
 SEED = 22
 
+# Global variable initializations
+STOP_REQUESTED = False
+
+# -----------------------------------------------------------------------------
+# Reproducibility
+# -----------------------------------------------------------------------------
+cudaq.set_random_seed(SEED_CUDAQ)
+
+# Set deterministic behavior for reproducibility
 def seed_everything(seed: int = SEED):
     os.environ["PYTHONHASHSEED"] = str(seed)
     random.seed(seed)
@@ -57,6 +101,7 @@ def seed_everything(seed: int = SEED):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+# Seed worker function for DataLoader workers if used
 def seed_worker(worker_id):
             worker_seed = SEED + worker_id
             random.seed(worker_seed)
@@ -64,56 +109,14 @@ def seed_worker(worker_id):
             torch.manual_seed(worker_seed)
 
 # -----------------------------------------------------------------------------
-# Config
-# -----------------------------------------------------------------------------
-# Quantum circuit settings
-QUBIT_COUNT = 4 # Options: 1, 2, 3, 4
-SHIFT = math.pi / 2
-
-# Data settings
-DATA_DIR = Path("./data")
-PRESETS={1: [5, 6],
-         2: [3, 4, 5, 6],
-         3: [1, 2, 3, 4, 5, 6, 7, 8],
-         4: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
-
-TARGET_DIGITS = PRESETS[QUBIT_COUNT]
-SAMPLE_COUNT = 8000
-TEST_SIZE_PCT = 30
-
-# Training hyperparameters
-BATCH_SIZE = 32 # was 64
-NUM_WORKERS = 0
-EPOCHS = 40
-EVAL_EVERY = EPOCHS // 10
-OPTIMIZER = "AdamW" # Options: "AdamW", "Adam", "RAdam", "NAdam"
-LR = 1e-3
-WEIGHT_DECAY = 1e-4
-DROPOUT = 0.15 # was 0.3
-
-# Early stop settings
-EARLY_STOP_METRIC = "accuracy" # Options: "loss", "accuracy"
-EARLY_STOP_PATIENCE = 2 # number of eval periods, *not* epochs
-SCHEDULER_PATIENCE = 0 # number of eval periods with no improvement before reducing LR
-
-# Device and Determinism Settings
-SET_DETERMINISTIC = True
-TORCH_DEVICE = "cpu" # Options: "cpu", "cuda"
-CUDA_DEVICE = "qpp-cpu" # Options: "qpp-cpu", "nvidia"
-
-# Global variable initializations
-DEVICE = None
-STOP_REQUESTED = False
-
-# -----------------------------------------------------------------------------
 # Backend selection
 # -----------------------------------------------------------------------------
-def configure_backend():
+def configure_backend(classical_choice: str, cudaq_choice: str):
 
-    if TORCH_DEVICE == "cuda" and torch.cuda.is_available():
+    if classical_choice == "cuda" and torch.cuda.is_available():
         try:
-            cudaq.set_target(CUDA_DEVICE)
-            device = torch.device(TORCH_DEVICE)
+            cudaq.set_target(cudaq_choice)
+            device = torch.device(classical_choice)
             return device
         except Exception as exc:
             print(f"Falling back to CPU backend because CUDA-Q nvidia target failed: {exc}")
@@ -183,7 +186,7 @@ class DeviceDataLoader:
         return len(self.loader)
 
 
-def build_dataloaders(target_digits, sample_count, test_size_pct, batch_size, device):
+def build_dataloaders(target_digits, test_size_pct, device, args):
     """
     Build deterministic train/test dataloaders for the selected subset of MNIST.
 
@@ -194,6 +197,9 @@ def build_dataloaders(target_digits, sample_count, test_size_pct, batch_size, de
     The split is stratified so that each class is represented proportionally in
     both the training and test sets.
     """
+    batch_size = args.batch_size
+    sample_count = args.samples
+
     # Standard MNIST normalization
     transform = transforms.Compose(
         [
@@ -204,7 +210,7 @@ def build_dataloaders(target_digits, sample_count, test_size_pct, batch_size, de
     
     # Load the full MNIST dataset and filter it down to the selected digits.
     dataset = datasets.MNIST(
-        root=str(DATA_DIR),
+        root=str(args.data_dir),
         train=True,
         download=True,
         transform=transform,
@@ -251,19 +257,19 @@ def build_dataloaders(target_digits, sample_count, test_size_pct, batch_size, de
             train_ds,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=NUM_WORKERS,
+            num_workers=args.num_workers,
             worker_init_fn=seed_worker,
             generator=g,
-            persistent_workers=(NUM_WORKERS > 0),
+            persistent_workers=(args.num_workers > 0),
         )
         test_loader = DataLoader(
             test_ds,
             batch_size=batch_size,
             shuffle=False,
-            num_workers=NUM_WORKERS,
+            num_workers=args.num_workers,
             worker_init_fn=seed_worker,
             generator=g,
-            persistent_workers=(NUM_WORKERS > 0),
+            persistent_workers=(args.num_workers > 0),
         )
     else:
         train_loader = DataLoader(
@@ -271,7 +277,7 @@ def build_dataloaders(target_digits, sample_count, test_size_pct, batch_size, de
             batch_size=batch_size,
             shuffle=True,
             drop_last=False,
-            num_workers=NUM_WORKERS,
+            num_workers=args.num_workers,
             pin_memory=pin_memory,
         )
         test_loader = DataLoader(
@@ -279,7 +285,7 @@ def build_dataloaders(target_digits, sample_count, test_size_pct, batch_size, de
             batch_size=batch_size,
             shuffle=False,
             drop_last=False,
-            num_workers=NUM_WORKERS,
+            num_workers=args.num_workers,
             pin_memory=pin_memory,
         )
 
@@ -297,22 +303,20 @@ def count_params(module):
     return total, trainable
 
 
-def print_model_summary(model):
+def print_model_summary(model, device, target_digits, args):
     """
     Print a compact summary of the hybrid model.
 
     - The classical side contains the trainable PyTorch parameters.
     - The quantum side contributes circuit structure, observables, and
       computational cost
-    
-    *Does not introduce separate registered nn.Parameters*
 
     The quantum component increases representational structure and
-    simulation cost without adding a large bank of stored weights.
+    simulation cost but does not introduce separate registered nn.Parameters.
     """
     # Count classical parameters and trainable parameters
-    classical_total, classical_trainable = count_params(model.classical)
-    total_params, trainable_params = count_params(model)
+    _, classical_trainable = count_params(model.classical)
+    num_classes = len(target_digits)
 
     # Extract quantum circuit details from the model's quantum runner
     runner = model.quantum.runner
@@ -321,31 +325,29 @@ def print_model_summary(model):
     observable_count = len(runner.hamiltonians)
 
     print("\n=== Hybrid QNN Summary ===")
-    print(f"Target digits:              {TARGET_DIGITS}")
-    print(f"Class count:               {len(TARGET_DIGITS)}")
+    print(f"Target digits:              {target_digits}")
+    print(f"Class count:               {num_classes}")
     print(f"Qubit count:               {qubit_count}")
     print(f"Circuit angles / sample:   {circuit_angles}")
-    print(f"Observable outputs:        {observable_count}")
+    print(f"Quantum features:        {observable_count}")
     print(f"Entangling gates:          {max(qubit_count - 1, 0)}")
     print(f"Rotation gates:            {2 * qubit_count}")
     print(f"Shift:                     {SHIFT}")
-    print(f"Sample count:              {SAMPLE_COUNT}")
+    print(f"Sample count:              {args.samples}")
     print(f"Test split (%):            {TEST_SIZE_PCT}")
-    print(f"Batch size:                {BATCH_SIZE}")
-    print(f"Epochs:                    {EPOCHS}")
-    print(f"Eval every:                {EVAL_EVERY}")
-    print(f"Learning rate:             {LR}")
-    print(f"Weight decay:              {WEIGHT_DECAY}")
-    print(f"Dropout:                   {DROPOUT}")
-    print(f"Device:                    {DEVICE}")
-    print(f"CUDA-Q target setting:     {CUDA_DEVICE}")
+    print(f"Batch size:                {args.batch_size}")
+    print(f"Epochs:                    {args.epochs}")
+    print(f"Eval every:                {(args.epochs // 10) if args.eval_every is None else args.eval_every}")
+    print(f"Learning rate:             {args.lr}")
+    print(f"Weight decay:              {args.weight_decay}")
+    print(f"Dropout:                   {args.dropout}")
 
     print("\n--- Parameter / circuit summary ---")
     print(f"Classical trainable params:        {classical_trainable:,}")
     print(f"Shared trainable quantum params:   0")
     print(f"Quantum circuit angles / sample:   {circuit_angles}")
-    print(f"Quantum features:                 {observable_count}")
-    print(f"Final readout classes:            {len(TARGET_DIGITS)}")
+    print(f"Quantum features:                  {observable_count}")
+    print(f"Final readout classes:             {num_classes}")
     print(f"Qubit count:                       {qubit_count}")
 
     print("\n--- Quantum cost summary ---")
@@ -369,86 +371,144 @@ def print_circuit_diagram(model):
 # -----------------------------------------------------------------------------
 # Quantum circuit wrapper
 # -----------------------------------------------------------------------------
-def build_observables(qubit_count: int):
+def pauli_product(axis: str, indices: list[int]):
     """
-    Construct the observable set used to read out the quantum circuit.
+    Build a multi-qubit Pauli product operator over the requested qubit indices.
 
-    The quantum circuit itself prepares a parameterized state, but the model
-    still needs classical-valued outputs for classification. Those outputs are
-    obtained as expectation values of selected Pauli observables.
+    This allows for global parity-like observables be generated dynamically 
+    for any qubit count instead of being manually written case by case and 
+    keeps the observable builder readable and scalable.
 
-    Design rationale:
-        - Single-qubit Z terms measure local polarization in the computational basis.
-          These terms capture whether each qubit is biased toward |0> or |1>.
-        - Two-qubit ZZ terms measure pairwise correlations in the computational basis.
-          These terms help detect whether two qubits tend to align or anti-align.
-        - Two-qubit XX terms measure correlations in the X basis, which adds sensitivity
-          to phase/coherence information that Z-only measurements would miss.
+    Parameters:
+        axis: Which Pauli axis to use. Supported values are "x" and "z".
+        indices: The qubit indices included in the product.
 
-    For this project, the number of observables == the number of target classes:
-        1 qubit -> 2 observables -> 2 classes
-        2 qubits -> 4 observables -> 4 classes
-        3 qubits -> 8 observables -> 8 classes
-
-    This makes the quantum layer output one score per class, so the expectation
-    values can be passed directly into CrossEntropyLoss as class logits.
-
-    The expectation values lie in [-1, 1]. They are not probabilities; they are
-    treated as class scores that the loss function can separate during training.
+    Returns:
+        A CUDA-Q SpinOperator representing the requested Pauli product.
     """
-    if qubit_count == 1:
-        return [
-            spin.z(0),  # Local computational-basis polarization
-            spin.x(0),  # Local X-basis polarization (adds phase/coherence sensitivity)
-        ]
-    elif qubit_count == 2:
-        return [
-            spin.z(0),  # Local computational-basis polarization
-            spin.z(1),  # Local computational-basis polarization
-            spin.z(0) * spin.z(1),  # Pairwise ZZ correlation
-            spin.x(0) * spin.x(1),  # Pairwise XX correlation
-        ]
-    elif qubit_count == 3:
-        return [
-            spin.z(0),                  # Local Z polarization of qubit 0
-            spin.z(1),                  # Local Z polarization of qubit 1
-            spin.z(2),                  # Local Z polarization of qubit 2
-            spin.z(0) * spin.z(1),      # Z-basis correlation between qubits 0 and 1
-            spin.z(1) * spin.z(2),      # Z-basis correlation between qubits 1 and 2
-            spin.z(0) * spin.z(2),      # Z-basis correlation between qubits 0 and 2
-            spin.x(0) * spin.x(1),      # X-basis correlation between qubits 0 and 1
-            spin.x(1) * spin.x(2),      # X-basis correlation between qubits 1 and 2
-        ]
-    elif qubit_count == 4:
-        return [
-            # Local Z readout
-            spin.z(0),
-            spin.z(1),
-            spin.z(2),
-            spin.z(3),
+    if not indices:
+        raise ValueError("indices must contain at least one qubit index.")
 
-            # Local X readout
-            spin.x(0),
-            spin.x(1),
-            spin.x(2),
-            spin.x(3),
+    # Example pauli_product("z", [0, 1, 2]) -> Z0 * Z1 * Z2
+    if axis == "z":
+        op = spin.z(indices[0])
+        for i in indices[1:]:
+            op = op * spin.z(i)
+        return op
 
-            # Nearest-neighbor ZZ correlations
-            spin.z(0) * spin.z(1),
-            spin.z(1) * spin.z(2),
-            spin.z(2) * spin.z(3),
+    # Example pauli_product("x", [0, 1, 2, 3]) -> X0 * X1 * X2 * X3
+    elif axis == "x":
+        op = spin.x(indices[0])
+        for i in indices[1:]:
+            op = op * spin.x(i)
+        return op
 
-            # Nearest-neighbor XX correlations
-            spin.x(0) * spin.x(1),
-            spin.x(1) * spin.x(2),
-            spin.x(2) * spin.x(3),
-
-            # Global parity-like terms
-            spin.z(0) * spin.z(1) * spin.z(2) * spin.z(3),
-            spin.x(0) * spin.x(1) * spin.x(2) * spin.x(3),
-        ]
     else:
-        raise ValueError("Only qubit counts 1, 2, 3, and 4 are supported.")
+        raise ValueError("axis must be 'x' or 'z'")
+
+
+def build_observables(qubit_count: int, max_features: Optional[int] = None):
+    """
+    Dynamically construct a quantum feature set for the variational circuit.
+
+    The observables are treated as quantum features. The final linear readout layer
+    learns how to combine those quantum features into class logits.
+
+    Feature-generation policy:
+        Tier 1: Local Z terms
+            - one per qubit
+            - captures each qubit's local computational-basis bias
+
+        Tier 2: Local X terms
+            - one per qubit
+            - adds local phase/coherence-sensitive information
+
+        Tier 3: Nearest-neighbor ZZ terms
+            - one for each adjacent qubit pair
+            - captures local pairwise correlations in the Z basis
+
+        Tier 4: Nearest-neighbor XX terms
+            - one for each adjacent qubit pair
+            - captures local pairwise correlations in the X basis
+
+        Tier 5: Global parity-like terms
+            - Z⊗...⊗Z
+            - X⊗...⊗X
+            - adds one coarse global view of the whole multi-qubit state
+
+    A tiered policy:
+        - Keeps the observable builder fully dynamic in qubit_count.
+        - Avoids the exponential blow-up of trying to include the full Pauli space.
+        - Matches the actual circuit structure: local rotations + nearest-neighbor
+          entangling chain.
+        - Gives a reasonable balance of local, pairwise, and global information.
+
+    Default feature budget:
+        If max_features is not provided, use 2**qubit_count features. This gives
+        the quantum layer a feature budget on the same order as the computational
+        basis size without attempting full state tomography.
+
+    Parameters:
+        qubit_count: Number of qubits in the circuit.
+        max_features: Optional cap on the number of observables/features returned.
+
+    Returns:
+        A list of CUDA-Q SpinOperator observables to be measured by the quantum layer.
+    """
+    if qubit_count < 1:
+        raise ValueError("qubit_count must be at least 1.")
+
+    if max_features is None:
+        max_features = 2 ** qubit_count
+
+    observables = []
+
+    def append_observable(op):
+        """
+        Append an observable only if the feature budget has not been reached.
+        Returns True if the budget is full after appending, otherwise False.
+        """
+        observables.append(op)
+        return len(observables) >= max_features
+
+    # -------------------------------------------------------------------------
+    # Tier 1: local Z features
+    # -------------------------------------------------------------------------
+    for i in range(qubit_count):
+        if append_observable(spin.z(i)):
+            return observables
+
+    # -------------------------------------------------------------------------
+    # Tier 2: local X features
+    # -------------------------------------------------------------------------
+    for i in range(qubit_count):
+        if append_observable(spin.x(i)):
+            return observables
+
+    # -------------------------------------------------------------------------
+    # Tier 3: nearest-neighbor ZZ features
+    # -------------------------------------------------------------------------
+    for i in range(qubit_count - 1):
+        if append_observable(spin.z(i) * spin.z(i + 1)):
+            return observables
+
+    # -------------------------------------------------------------------------
+    # Tier 4: nearest-neighbor XX features
+    # -------------------------------------------------------------------------
+    for i in range(qubit_count - 1):
+        if append_observable(spin.x(i) * spin.x(i + 1)):
+            return observables
+
+    # -------------------------------------------------------------------------
+    # Tier 5: global parity-like features
+    # -------------------------------------------------------------------------
+    if append_observable(pauli_product("z", list(range(qubit_count)))):
+        return observables
+
+    if append_observable(pauli_product("x", list(range(qubit_count)))):
+        return observables
+
+    return observables
     
 class QuantumCircuitRunner:
     """
@@ -520,16 +580,21 @@ class QuantumCircuitRunner:
         Each row of theta_vals represents one sample-specific set of circuit
         angles produced by the classical network. For each sample, the circuit
         is executed and measured against all observables in self.hamiltonians.
+        
+        Parameters:
+            theta_vals: a batch of circuit angle vectors with shape
+                        (batch_size, 2 * qubit_count)
 
-        The returned tensor has shape:
+        Return shape:
             (batch_size, number_of_observables)
 
-        - each row corresponds to one input image
-        - each column is the expectation value of one observable
-        - these expectation values serve as the output scores of the quantum layer
+        Interpretation:
+            - each row corresponds to one input image
+            - each column is one quantum feature
+            - each feature is the expectation value of a selected observable
 
-        Because the observable count is matched to the class count, the output
-        can be used directly as the logits for multiclass classification.
+        In the updated architecture, these quantum features are passed into a final
+        classical readout layer, which learns how to map them to class logits.
         """
         # Convert the input tensor to a NumPy array for CUDA-Q, and batch qubits
         theta_np = theta_vals.detach().cpu().numpy()
@@ -557,10 +622,10 @@ class QuantumAutograd(Function):
     CUDA-Q circuit evaluations are not automatically differentiable by PyTorch,
     so this class defines how the quantum layer participates in backpropagation.
 
-    - forward: run the parameterized quantum circuit and return its observable
-      expectation values
+    - forward:  run the parameterized quantum circuit and return its observable
+                expectation values
     - backward: compute gradients with respect to the circuit angles using the
-      parameter-shift rule
+                parameter-shift rule
 
     The quantum circuit behaves like a differentiable layer inside the
     larger hybrid neural network.
@@ -576,7 +641,7 @@ class QuantumAutograd(Function):
                     classical network
             runner: helper object that executes the CUDA-Q circuit and measures
                     the selected observables
-            shift: parameter-shift amount used later in the backward pass
+            shift:  parameter-shift amount used later in the backward pass
 
         Forward Pass:
             1. stores the circuit runner and shift value in the autograd context
@@ -596,15 +661,29 @@ class QuantumAutograd(Function):
         Backward pass using a vectorized parameter-shift rule.
 
         Instead of shifting one parameter at a time in a Python loop, this
-        implementation constructs all +shift and -shift parameter sets in two
-        larger batches. This preserves the same gradient rule while reducing
-        Python overhead.
+        constructs all +shift and -shift parameter sets in two larger batches. 
+        This preserves the same gradient rule while reducing Python overhead.
 
+        Parameters:
+            grad_output: the gradient of the loss with respect to the quantum
+                         layer outputs 
+                        
         Output shape logic:
             - deriv has shape (batch, parameter, observable)
             - grad_output has shape (batch, observable)
-            - contracting over the observable dimension gives gradients with respect
-              to each circuit parameter for each sample
+            - contracting over the observable dimension gives gradients with
+              respect to each circuit parameter for each sample
+        
+        Backward Pass:
+            1. retrieves the saved input angles and shift value from the context
+            2. constructs the shifted parameter sets for all parameters in two
+               large batches (one for +shift and one for -shift)
+            3. evaluates the circuit on all shifted parameter sets to get the
+               corresponding expectation values
+            4. applies the parameter-shift formula to compute the gradient of
+               each observable with respect to each circuit parameter
+            5. combines those gradients with grad_output to get the final
+               gradient with respect to the input angles
         """
         (thetas,) = ctx.saved_tensors
         batch_size, param_count = thetas.shape
@@ -612,12 +691,12 @@ class QuantumAutograd(Function):
 
         """
         Vectorized parameter-shift:
-            Instead of 2 * P separate quantum runs, build all shifted parameter sets
-            in two large batches and call the circuit runner only twice.
+            Instead of 2 * P separate quantum runs, build all shifted parameter 
+            sets in two large batches and call the circuit runner only twice.
         """
         # Create identity matrix to add/subtract shift to each parameter independently
         eye = torch.eye(param_count, device=thetas.device, dtype=thetas.dtype).unsqueeze(0)
-        theta_expanded = thetas.unsqueeze(1)  # (B, 1, P)
+        theta_expanded = thetas.unsqueeze(1)
 
         # Construct the +shift and -shift parameter sets for all parameters
         plus = (theta_expanded + shift * eye).reshape(batch_size * param_count, param_count)
@@ -628,8 +707,8 @@ class QuantumAutograd(Function):
         exp_minus = ctx.runner.run(minus).reshape(batch_size, param_count, -1)
 
         # Compute the parameter-shift gradient for each parameter and sample
-        deriv = (exp_plus - exp_minus) / (2.0 * shift)  # (B, P, O)
-        grad_thetas = (grad_output.unsqueeze(1) * deriv).sum(dim=2)  # (B, P)
+        deriv = (exp_plus - exp_minus) / (2.0 * shift)
+        grad_thetas = (grad_output.unsqueeze(1) * deriv).sum(dim=2)
 
         return grad_thetas, None, None
 
@@ -638,15 +717,14 @@ class QuantumLayer(nn.Module):
     """
     PyTorch module that wraps the custom quantum autograd function.
 
-    This layer provides the interface between the classical network and the
-    quantum circuit. It accepts a batch of circuit angles produced by the
-    classical front end, sends them through the quantum circuit, and returns
-    the resulting observable expectation values.
+    The interface between the classical network and the quantum circuit. 
+    It accepts a batch of circuit angles produced by the classical front 
+    end, sends them through the quantum circuit, and returns the resulting
+    observable expectation values.
 
-    Unlike a standard neural network layer, this module does not store its own
-    trainable weight tensors. The trainable parameters live in the classical 
-    network, which learns how to generate useful circuit angles for each input 
-    sample.
+    The quantum layer does not store its own trainable weight tensors. The 
+    trainable parameters live in the classical network, which learns how to 
+    generate useful circuit angles for each input sample.
     """
     def __init__(self, qubit_count: int, shift: float):
         super().__init__()
@@ -679,53 +757,65 @@ class HybridQNN(nn.Module):
     """
     Hybrid classical-quantum neural network for MNIST classification.
 
-    Architecture:
-        - A classical feedforward network first compresses the 28x28 image into a
-          low-dimensional parameter vector.
-        - The size of that vector is 2 * qubit_count so it matches the number of
-          trainable rotation angles used by the quantum circuit.
-        - The quantum layer then maps those circuit angles to expectation values of
-          the chosen observables, producing one output score per class.
+    Flow:
+        image -> classical network -> circuit angles -> quantum layer ->
+        quantum features -> final readout layer -> class logits
 
-    This design separates the roles of the two model components:
-        - the classical front end performs feature extraction from pixel space
-        - the quantum back end acts as a small nonlinear feature map/readout layer
+    Design:
+        - The classical front end compresses the image into a small set of
+          circuit angles.
+        - The quantum circuit transforms those angles into a richer feature
+          representation by measuring a structured set of observables.
+        - A final linear readout layer maps the quantum feature vector to the
+          required number of class logits.
     """
-    def __init__(self, qubit_count: int, shift: float):
+    def __init__(self, qubit_count: int, shift: float, dropout: float, num_classes: int):
         super().__init__()
 
+        """
+        Number of trainable circuit angles:
+            - one RY angle + one RX angle per qubit
+        """
         param_count = 2 * qubit_count
-        quantum_feature_count = len(build_observables(qubit_count))
-        num_classes = len(TARGET_DIGITS)
 
-        # Classical network
+        # Number of quantum features returned by the observable builder
+        quantum_feature_count = len(build_observables(qubit_count))
+
+        """
+        Classical encoder:
+            Maps the 28x28 image to a small vector of circuit angles.
+            """
         self.classical = nn.Sequential(
             nn.Flatten(),
             nn.Linear(28 * 28, 128),
             nn.ReLU(),
             nn.Linear(128, 32),
             nn.ReLU(),
-            nn.Dropout(DROPOUT),
+            nn.Dropout(dropout),
             nn.Linear(32, param_count),
         )
 
-        '''
-        Quantum layer that runs the parameterized circuit and produces 
-        observable expectation values as outputs.
-        '''
+        """
+        Quantum feature extractor:
+            Runs the parameterized quantum circuit and returns a vector of
+            observable expectation values.
+            """
         self.quantum = QuantumLayer(qubit_count, shift)
-        
-        '''
-        Final linear readout layer that maps from the quantum feature space 
-        to the class logits. This allows the model to learn how to combine 
-        the quantum features into class scores.
-        '''
+
+        """
+        Final classical readout:
+            Learns how to combine the quantum features into class logits.
+        """
         self.readout = nn.Linear(quantum_feature_count, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Convert the input image into circuit angles with the classical network,
-        then pass those angles through the quantum layer to obtain class scores.
+        Forward pass through the hybrid model.
+
+        Steps:
+            1. Encode the image into circuit angles.
+            2. Evaluate the quantum circuit to obtain quantum features.
+            3. Map those features to class logits with the final readout layer.
         """
         theta_params = self.classical(x)
         q_features = self.quantum(theta_params)
@@ -737,14 +827,15 @@ class HybridQNN(nn.Module):
 # Training / evaluation
 # -----------------------------------------------------------------------------
 # Loader distribution printing and evaluation functions
-def print_loader_distribution(loader, name):
-    counts = torch.zeros(len(TARGET_DIGITS), dtype=torch.long)
+def print_loader_distribution(loader, name, digit_list):
+    num_classes = len(digit_list)
+    counts = torch.zeros(num_classes, dtype=torch.long)
     for _, y in loader:
-        counts += torch.bincount(y.cpu(), minlength=len(TARGET_DIGITS))
+        counts += torch.bincount(y.cpu(), minlength=num_classes)
 
     print(f"\n{name} distribution:")
     for cls, count in enumerate(counts.tolist()):
-        print(f"Class {cls} ({TARGET_DIGITS[cls]}): {count} samples")
+        print(f"Class {cls} ({digit_list[cls]}): {count} samples")
 
 # Evaluation on test set
 @torch.inference_mode()
@@ -756,6 +847,7 @@ def evaluate(model, loader, loss_fn):
     y_true_all = []
     y_pred_all = []
 
+    # Evaluation loop
     for x, y in loader:
         logits = model(x)
         loss = loss_fn(logits, y)
@@ -770,31 +862,32 @@ def evaluate(model, loader, loss_fn):
         y_true_all.append(y.cpu())
         y_pred_all.append(preds.cpu())
 
+    # Evaluation metric calculation
     avg_loss = total_loss / max(total_examples, 1)
     avg_acc = total_correct / max(total_examples, 1)
     y_true_all = torch.cat(y_true_all)
     y_pred_all = torch.cat(y_pred_all)
     return avg_loss, avg_acc, y_true_all, y_pred_all
 
-# Optimizer selection
-def build_optimizer(model):
+# Build selected optimizer
+def build_optimizer(model, args):
     """
     Build the optimizer based on the selection.
     """
-    name = OPTIMIZER.lower()
+    name = args.optimizer.lower()
 
     if name == "adamw":
-        return optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
+        return optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     elif name == "adam":
-        return optim.Adam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
+        return optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     elif name == "radam":
-        return optim.RAdam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
+        return optim.RAdam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     elif name == "nadam":
-        return optim.NAdam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
+        return optim.NAdam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     else:
-        raise ValueError(f"Unsupported optimizer: {OPTIMIZER}. Please choose one of the following from the Adam family: AdamW, Adam, RAdam, or NAdam.")
+        raise ValueError(f"Unsupported optimizer: {args.optimizer}. Please choose one of the following from the Adam family: AdamW, Adam, RAdam, or NAdam.")
 
-def train_model(model, train_loader, test_loader, epochs, eval_every):
+def train_model(model, train_loader, test_loader, args):
     """
     Train the hybrid model with AdamW and monitor test performance periodically.
 
@@ -806,21 +899,27 @@ def train_model(model, train_loader, test_loader, epochs, eval_every):
     evaluation reflects the best observed test-loss checkpoint rather than
     simply the last epoch.
     """
+    # Setup for graceful interruption and cleanup
     signal.signal(signal.SIGINT, handle_sigint)
     atexit.register(cleanup)
 
-    optimizer = build_optimizer(model)
+    # Training configuration
+    epochs = args.epochs
+    eval_every = args.epochs // 10 if args.eval_every is None else args.eval_every
+    optimizer = build_optimizer(model, args)
     loss_fn = nn.CrossEntropyLoss()
 
+    # LR Scheduler
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode="min",      # because lower test_loss is better
         factor=0.5,      # cut LR in half when plateauing
-        patience=SCHEDULER_PATIENCE,      # number of eval periods with no improvement
+        patience=args.scheduler_patience,      # number of eval periods with no improvement
         threshold=1e-3,  # ignore tiny meaningless changes
         min_lr=1e-5,
     )
 
+    # Histories for plotting and analysis
     train_loss_hist = []
     train_acc_hist = []
     test_loss_hist = []
@@ -831,7 +930,8 @@ def train_model(model, train_loader, test_loader, epochs, eval_every):
     use_tqdm = sys.stderr.isatty()
     progress = trange(epochs, desc="Training", leave=True, disable=not use_tqdm)
 
-    patience = EARLY_STOP_PATIENCE
+    # Early stopping variables
+    patience = args.early_stop_patience
     best_test_loss = float("inf")
     best_test_acc = 0.0
     best_epoch = 0
@@ -846,31 +946,36 @@ def train_model(model, train_loader, test_loader, epochs, eval_every):
         running_correct = 0
         running_examples = 0
         
-
+        # Graceful interruption check before starting the epoch
         if STOP_REQUESTED:
             print("Stopping before next epoch.")
             break
-
+        
+        # Mini-batch training loop
         for x, y in train_loader:
             if STOP_REQUESTED:
                 break
-
+            
+            # Zero gradients, run forward pass, compute loss, backpropagate, and update weights
             optimizer.zero_grad(set_to_none=True)
             logits = model(x)
             loss = loss_fn(logits, y)
             loss.backward()
             optimizer.step()
 
+            # Compute training metrics for this batch and accumulate for the epoch
             preds = logits.argmax(dim=1)
             batch_size = y.size(0)
             running_loss += loss.item() * batch_size
             running_correct += (preds == y).sum().item()
             running_examples += batch_size
 
+        # Check for graceful interruption after the epoch
         if STOP_REQUESTED:
             print("Training interrupted cleanly.")
             break
-
+        
+        # Epoch-level training metrics
         train_loss = running_loss / max(running_examples, 1)
         train_acc = running_correct / max(running_examples, 1)
         train_loss_hist.append(train_loss)
@@ -889,11 +994,12 @@ def train_model(model, train_loader, test_loader, epochs, eval_every):
             test_acc_hist.append(test_acc)
             eval_epochs.append(epoch + 1)
 
+            # Step the scheduler based on test loss
             scheduler.step(test_loss)
             current_lr = optimizer.param_groups[0]["lr"]
 
             # Early stop on loss block
-            if EARLY_STOP_METRIC == "loss":
+            if args.early_stop_metric == "loss":
                 if test_loss < best_test_loss:
                     best_test_loss = test_loss
                     best_epoch = epoch + 1
@@ -903,8 +1009,9 @@ def train_model(model, train_loader, test_loader, epochs, eval_every):
                 else:
                     patience_counter += 1
                     status = f"no_improve={patience_counter}, best={best_test_loss:.4f}@{best_epoch}"
+
             # Early stop on accuracy block
-            elif EARLY_STOP_METRIC == "accuracy":
+            elif args.early_stop_metric == "accuracy":
                 if test_acc > best_test_acc:
                     best_test_acc = test_acc
                     best_epoch = epoch + 1
@@ -948,13 +1055,11 @@ def train_model(model, train_loader, test_loader, epochs, eval_every):
             if patience_counter >= patience:
                 print(f"Early stopping triggered at epoch {epoch + 1}.")
                 break
-
-            
     
     # Restore best model state if available
     if best_state is not None:
         model.load_state_dict(best_state)
-        if EARLY_STOP_METRIC == "loss":
+        if args.early_stop_metric == "loss":
             print(
                 f"Restored best model from epoch {best_epoch} "
                 f"with test_loss={best_test_loss:.4f}"
@@ -979,6 +1084,7 @@ def train_model(model, train_loader, test_loader, epochs, eval_every):
 # -----------------------------------------------------------------------------
 # Reporting / plots
 # -----------------------------------------------------------------------------
+# Per-class accuracy calculation
 def per_class_accuracy(y_true, y_pred, num_classes):
     results = {}
     for cls in range(num_classes):
@@ -988,7 +1094,9 @@ def per_class_accuracy(y_true, y_pred, num_classes):
         results[cls] = cls_correct / cls_total if cls_total > 0 else 0.0
     return results
 
-def save_metrics_plot(history, path=f"optimized_metrics_{QUBIT_COUNT}q_{len(TARGET_DIGITS)}c.png"):
+# Loss and accuracy curves plotting
+def save_metrics_plot(history, save_dir, qubit_count, digit_list_length):
+    path=f"{save_dir}/optimized_metrics_{qubit_count}q_{digit_list_length}c.png"
     plt.figure(figsize=(10, 4))
 
     plt.subplot(1, 2, 1)
@@ -1021,15 +1129,17 @@ def save_metrics_plot(history, path=f"optimized_metrics_{QUBIT_COUNT}q_{len(TARG
     plt.savefig(path, dpi=200)
     plt.close()
 
-
-def save_confusion_matrix(y_true, y_pred, path=f"optimized_confusion_matrix_{QUBIT_COUNT}q_{len(TARGET_DIGITS)}c.png"):
+# Confusion matrix plotting
+def save_confusion_matrix(y_true, y_pred, save_dir, qubit_count, digit_list):
+    num_classes = len(digit_list)
+    path=f"{save_dir}/optimized_confusion_matrix_{qubit_count}q_{num_classes}c.png"
     cm = confusion_matrix(y_true.numpy(), y_pred.numpy())
 
     plt.figure(figsize=(6, 5))
     plt.imshow(cm)
     plt.colorbar()
-    plt.xticks(range(len(TARGET_DIGITS)), TARGET_DIGITS)
-    plt.yticks(range(len(TARGET_DIGITS)), TARGET_DIGITS)
+    plt.xticks(range(num_classes), digit_list)
+    plt.yticks(range(num_classes), digit_list)
     plt.xlabel("Predicted Digit")
     plt.ylabel("True Digit")
     plt.title("Optimized Hybrid QNN Confusion Matrix")
@@ -1047,72 +1157,120 @@ def save_confusion_matrix(y_true, y_pred, path=f"optimized_confusion_matrix_{QUB
 # Main
 # -----------------------------------------------------------------------------
 def main():
-    global DEVICE
-    DEVICE = configure_backend()
+    # Command-line argument parsing
+    parser = argparse.ArgumentParser()
 
-    print(f"Using CUDA-Q target: {CUDA_DEVICE}")
-    print(f"Using device: {DEVICE}")
-    print(f"Optimizer: {OPTIMIZER}")
+    # Quantum hyperparameters
+    parser.add_argument("--num_qubits", type=int, default=1, choices=[1, 2, 3, 4], help="Number of qubits in the quantum circuit.")
+    parser.add_argument("--samples", type=int, default=4000, help="Number of samples to use from the dataset.")
+    
+    # Data and device hyperparameters
+    parser.add_argument("--data_dir", type=str, required=True, help="Directory to download/load the MNIST dataset. Generally in './data' in the project root.")
+    parser.add_argument("--save_dir", type=str, required=True, help="Directory to save outputs like metrics plots and confusion matrices.")
+    parser.add_argument("--device", type=str, default="cpu", choices=["cpu", "cuda"], help="Device to use for classical component.")
+    parser.add_argument("--q_device", type=str, default="qpp-cpu", choices=["qpp-cpu", "cuda"], help="CUDA-Q target device.")
+    
+    # Training hyperparameters
+    parser.add_argument("--batch_size", type=int, default=32, help="Batch size for training and evaluation.")
+    parser.add_argument("--num_workers", type=int, default=0, help="Number of worker processes for data loading.")
+    parser.add_argument("--epochs", type=int, default=40, help="Number of training epochs.")
+    parser.add_argument("--eval_every", type=int, default=None, help="Evaluate on the test set every N epochs.")
+    parser.add_argument("--optimizer", type=str, default="AdamW", choices=["AdamW", "Adam", "RAdam", "NAdam"], help="Optimizer to use for training.")
+    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate for the optimizer.")
+    parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay (L2 regularization) factor for the optimizer.")
+    parser.add_argument("--dropout", type=float, default=0.15, help="Dropout rate for the classical encoder.")
+    
+    # Early stop and scheduler hyperparameters
+    parser.add_argument("--early_stop_metric", type=str, default="loss", choices=["loss", "accuracy"], help="Metric to monitor for early stopping.")
+    parser.add_argument("--early_stop_patience", type=int, default=1, help="Number of evaluation periods with no improvement before early stopping.")
+    parser.add_argument("--scheduler_patience", type=int, default=0, help="Number of evaluation periods with no improvement before reducing learning rate.")
 
-    seed_everything(22)
+    args = parser.parse_args()
 
-    observables = build_observables(QUBIT_COUNT)
-    num_classes = len(TARGET_DIGITS)
+    # Set global constants based on parsed arguments
+    device = configure_backend(args.device, args.q_device)
 
+    # Create the save directory if it doesn't exist
+    Path(args.save_dir).mkdir(parents=True, exist_ok=True)
+
+    # Print device and optimizer configuration summary
+    print(f"Using CUDA-Q target: {args.q_device}")
+    print(f"Using device: {device}")
+    print(f"Optimizer: {args.optimizer}")
+
+    # Set deterministic behavior for reproducibility
+    if SET_DETERMINISTIC:
+        seed_everything(22)
+
+    # Select MNIST digit subset based on qubit count
+    target_digits = PRESETS[args.num_qubits]
+    num_classes = len(target_digits)
+
+    # Build the quantum feature set
+    observables = build_observables(args.num_qubits)
+
+    # Observable count must be at least equal to the number of classes
     if len(observables) < num_classes:
         raise ValueError(
             f"Need at least as many quantum features as classes. "
             f"Got {len(observables)} observables for {num_classes} classes."
         )
 
+    # Dataloaders
     train_loader, test_loader = build_dataloaders(
-        target_digits=TARGET_DIGITS,
-        sample_count=SAMPLE_COUNT,
+        target_digits=target_digits,
         test_size_pct=TEST_SIZE_PCT,
-        batch_size=BATCH_SIZE,
-        device=DEVICE,
+        device=device,
+        args=args
     )
 
-    print_loader_distribution(train_loader, "Train")
-    print_loader_distribution(test_loader, "Test")
+    # Print dataset distribution summary
+    print_loader_distribution(train_loader, "Train", target_digits)
+    print_loader_distribution(test_loader, "Test", target_digits)
 
-    model = HybridQNN(QUBIT_COUNT, SHIFT).to(DEVICE)
-    print_model_summary(model)
+    # Build the Hybrid QNN and print the model summary
+    model = HybridQNN(args.num_qubits, SHIFT, args.dropout, num_classes).to(device)
+    print_model_summary(model, device, target_digits, args)
 
+    # Start time of training loop
     start_time = time.time()
 
+    # Training loop
     history = train_model(
         model=model,
         train_loader=train_loader,
         test_loader=test_loader,
-        epochs=EPOCHS,
-        eval_every=EVAL_EVERY,
+        args=args
     )
 
+    # Final evaluation
     test_loss, test_acc, y_true, y_pred = evaluate(model, test_loader, history["loss_fn"])
 
+    # Elapsed time calculation
     end_time = time.time()
     elapsed_time = end_time - start_time
 
+    # Final metrics and reporting
     print("\nFinal metrics:")
     print(f"Test Loss: {test_loss:.4f}")
     print(f"Test Acc:  {test_acc:.4f}")
 
-    per_class = per_class_accuracy(y_true, y_pred, num_classes=len(TARGET_DIGITS))
+    per_class = per_class_accuracy(y_true, y_pred, num_classes=num_classes)
     print("\nPer-class accuracy:")
+
     for cls, acc in per_class.items():
-        print(f"Class {cls} ({TARGET_DIGITS[cls]}): {acc:.4f}")
+        print(f"Class {cls} ({target_digits[cls]}): {acc:.4f}")
 
     print("\nClassification report:")
     print(classification_report(y_true.numpy(), y_pred.numpy(), digits=4))
 
-    save_confusion_matrix(y_true, y_pred)
-    save_metrics_plot(history)
+    # Save plots
+    save_confusion_matrix(y_true, y_pred, args.save_dir, args.num_qubits, target_digits)
+    save_metrics_plot(history, args.save_dir, args.num_qubits, num_classes)
 
+    # Print the quantum circuit and total training time
     print_circuit_diagram(model)
-
     print(f"\nTotal training time: {elapsed_time:.2f}s")
-
 
 
 if __name__ == "__main__":
