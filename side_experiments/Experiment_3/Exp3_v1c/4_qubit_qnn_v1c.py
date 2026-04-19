@@ -1,12 +1,13 @@
 """
-Experiment 3 (v1b):  4-Qubit Scaling Evaluation - Adjusted Observables to enrich feature extraction
+Experiment 3 (v1c):  4-Qubit Scaling Evaluation - Adjusted Observables to enrich feature extraction
+- 4 local z, 3 zz, 2 xx, 1 global 4-body term
 
 Objective:
 Evaluate whether increasing qubit count from 2/3 → 4 improves multiclass classification
 performance and scaling behavior.
 
 Configuration:
-- 4-qubit hybrid QNN (Exp3_v1)
+- 4-qubit hybrid QNN (Exp3_v1b)
 - 10-class MNIST classification
 - Adjusted observables (+ X correlation, Y correlation, higher-order term)
 - Extended training (100 epochs)
@@ -156,7 +157,7 @@ grid_img = torchvision.utils.make_grid(
 )
 plt.imshow(grid_img.permute(1, 2, 0))
 plt.axis("off")
-plt.savefig("sample_inputs_Exp3_v1b.png", dpi=200, bbox_inches="tight")
+plt.savefig("sample_inputs_Exp3_v1c.png", dpi=200, bbox_inches="tight")
 plt.close()
 
 class QuantumFunction(Function):
@@ -215,8 +216,8 @@ class QuantumFunction(Function):
             spin.z(1) * spin.z(2),
             spin.z(2) * spin.z(3),
             spin.x(0) * spin.x(1),
-            spin.y(1) * spin.y(2),
-            spin.z(0) * spin.z(1) * spin.z(2),
+            spin.x(2) * spin.x(3),
+            spin.z(0) * spin.z(1) * spin.z(2) * spin.z(3),
         ]
 
         outputs = []
@@ -397,9 +398,9 @@ sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
             xticklabels=target_digits, yticklabels=target_digits)
 plt.xlabel("Predicted Digit")
 plt.ylabel("True Digit")
-plt.title("Experiment 3 (v1b) Confusion Matrix")
+plt.title("Experiment 3 (v1c) Confusion Matrix")
 plt.tight_layout()
-plt.savefig("experiment3v1b_confusion_matrix.png", dpi=200)
+plt.savefig("experiment3v1c_confusion_matrix.png", dpi=200)
 plt.close()
 
 plt.figure(figsize=(10, 5))
@@ -420,5 +421,5 @@ plt.legend()
 plt.title("Accuracy")
 
 plt.tight_layout()
-plt.savefig("experiment3_v1b_metrics.png", dpi=200)
+plt.savefig("experiment3_v1c_metrics.png", dpi=200)
 plt.close()
