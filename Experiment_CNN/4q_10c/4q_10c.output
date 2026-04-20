@@ -1,0 +1,120 @@
+nohup: ignoring input
+Using CUDA-Q target: qpp-cpu
+Using device: cpu
+Optimizer: AdamW
+
+Train distribution:
+Class 0 (0): 284 samples
+Class 1 (1): 319 samples
+Class 2 (2): 260 samples
+Class 3 (3): 283 samples
+Class 4 (4): 267 samples
+Class 5 (5): 260 samples
+Class 6 (6): 271 samples
+Class 7 (7): 273 samples
+Class 8 (8): 290 samples
+Class 9 (9): 293 samples
+
+Test distribution:
+Class 0 (0): 122 samples
+Class 1 (1): 136 samples
+Class 2 (2): 111 samples
+Class 3 (3): 122 samples
+Class 4 (4): 115 samples
+Class 5 (5): 111 samples
+Class 6 (6): 116 samples
+Class 7 (7): 117 samples
+Class 8 (8): 124 samples
+Class 9 (9): 126 samples
+
+=== Hybrid QNN Summary ===
+Target digits:              [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+Class count:               10
+Qubit count:               4
+Circuit angles / sample:   8
+Quantum features:        16
+Entangling gates:          3
+Rotation gates:            8
+Shift:                     1.5707963267948966
+Sample count:              4000
+Test split (%):            30
+Batch size:                32
+Epochs:                    20
+Eval every:                2
+Learning rate:             0.001
+Weight decay:              0.0001
+Dropout:                   0.15
+
+--- Parameter / circuit summary ---
+Classical trainable params:        26,632
+Shared trainable quantum params:   0
+Quantum circuit angles / sample:   8
+Quantum features:                  16
+Final readout classes:             10
+Qubit count:                       4
+
+--- Quantum cost summary ---
+observe() calls / forward pass:         16
+observe() calls / backward pass:        32
+observe() calls / train batch total:    48
+Epoch 1/20 | train_loss=2.1039 | train_acc=0.3168 | test_loss=1.7689 | test_acc=0.5958 | lr=1.00e-03 | improved | 0.0s
+Epoch 2/20 | train_loss=1.6677 | train_acc=0.6125 | test_loss=1.4195 | test_acc=0.7417 | lr=1.00e-03 | improved | 176.5s
+Epoch 4/20 | train_loss=1.0590 | train_acc=0.8286 | test_loss=0.8794 | test_acc=0.8792 | lr=1.00e-03 | improved | 509.2s
+Epoch 6/20 | train_loss=0.6816 | train_acc=0.8975 | test_loss=0.5568 | test_acc=0.9158 | lr=1.00e-03 | improved | 597.9s
+Epoch 8/20 | train_loss=0.4577 | train_acc=0.9279 | test_loss=0.3883 | test_acc=0.9250 | lr=1.00e-03 | improved | 337.0s
+Epoch 10/20 | train_loss=0.3505 | train_acc=0.9400 | test_loss=0.3191 | test_acc=0.9342 | lr=1.00e-03 | improved | 313.2s
+Epoch 12/20 | train_loss=0.2720 | train_acc=0.9500 | test_loss=0.2641 | test_acc=0.9417 | lr=1.00e-03 | improved | 285.7s
+Epoch 14/20 | train_loss=0.2227 | train_acc=0.9611 | test_loss=0.2261 | test_acc=0.9483 | lr=1.00e-03 | improved | 292.5s
+Epoch 16/20 | train_loss=0.1924 | train_acc=0.9621 | test_loss=0.2128 | test_acc=0.9467 | lr=1.00e-03 | improved | 302.2s
+Epoch 18/20 | train_loss=0.1587 | train_acc=0.9711 | test_loss=0.2070 | test_acc=0.9458 | lr=1.00e-03 | improved | 296.7s
+Epoch 20/20 | train_loss=0.1426 | train_acc=0.9725 | test_loss=0.1825 | test_acc=0.9508 | lr=1.00e-03 | improved | 294.7s
+Restored best model from epoch 20 with test_loss=0.1825
+
+Final metrics:
+Test Loss: 0.1825
+Test Acc:  0.9508
+
+Per-class accuracy:
+Class 0 (0): 0.9836
+Class 1 (1): 0.9559
+Class 2 (2): 0.9550
+Class 3 (3): 0.9508
+Class 4 (4): 0.9478
+Class 5 (5): 0.9369
+Class 6 (6): 0.9828
+Class 7 (7): 0.9487
+Class 8 (8): 0.9435
+Class 9 (9): 0.9048
+
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.9524    0.9836    0.9677       122
+           1     0.9559    0.9559    0.9559       136
+           2     0.9550    0.9550    0.9550       111
+           3     0.9134    0.9508    0.9317       122
+           4     0.9909    0.9478    0.9689       115
+           5     0.9455    0.9369    0.9412       111
+           6     0.9828    0.9828    0.9828       116
+           7     0.9487    0.9487    0.9487       117
+           8     0.9435    0.9435    0.9435       124
+           9     0.9268    0.9048    0.9157       126
+
+    accuracy                         0.9508      1200
+   macro avg     0.9515    0.9510    0.9511      1200
+weighted avg     0.9511    0.9508    0.9508      1200
+
+
+=== Circuit diagram ===
+     ╭───────╮     ╭───────╮                  
+q0 : ┤ ry(0) ├──●──┤ rx(0) ├──────────────────
+     ├───────┤╭─┴─╮╰───────╯╭───────╮         
+q1 : ┤ ry(0) ├┤ x ├────●────┤ rx(0) ├─────────
+     ├───────┤╰───╯  ╭─┴─╮  ╰───────╯╭───────╮
+q2 : ┤ ry(0) ├───────┤ x ├──────●────┤ rx(0) ├
+     ├───────┤       ╰───╯    ╭─┴─╮  ├───────┤
+q3 : ┤ ry(0) ├────────────────┤ x ├──┤ rx(0) ├
+     ╰───────╯                ╰───╯  ╰───────╯
+
+
+Total training time: 3822.86s

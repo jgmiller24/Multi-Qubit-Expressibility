@@ -1,0 +1,77 @@
+Using CUDA-Q target: qpp-cpu
+Using device: cpu
+Optimizer: AdamW
+
+Train distribution:
+Class 0 (5): 1341 samples
+Class 1 (6): 1459 samples
+
+Test distribution:
+Class 0 (5): 575 samples
+Class 1 (6): 625 samples
+
+=== Hybrid QNN Summary ===
+Target digits:              [5, 6]
+Class count:               2
+Qubit count:               1
+Circuit angles / sample:   2
+Quantum features:        2
+Entangling gates:          0
+Rotation gates:            2
+Shift:                     1.5707963267948966
+Sample count:              4000
+Test split (%):            30
+Batch size:                32
+Epochs:                    10
+Eval every:                2
+Learning rate:             0.001
+Weight decay:              0.0001
+Dropout:                   0.15
+
+--- Parameter / circuit summary ---
+Classical trainable params:        26,434
+Shared trainable quantum params:   0
+Quantum circuit angles / sample:   2
+Quantum features:                  2
+Final readout classes:             2
+Qubit count:                       1
+
+--- Quantum cost summary ---
+observe() calls / forward pass:         2
+observe() calls / backward pass:        4
+observe() calls / train batch total:    6
+Epoch 1/10 | train_loss=0.3804 | train_acc=0.9071 | test_loss=0.2746 | test_acc=0.9742 | lr=1.00e-03 | improved | 0.0s                                                      
+Epoch 2/10 | train_loss=0.2559 | train_acc=0.9796 | test_loss=0.2194 | test_acc=0.9825 | lr=1.00e-03 | improved | 5.5s                                                      
+Epoch 4/10 | train_loss=0.1681 | train_acc=0.9907 | test_loss=0.1485 | test_acc=0.9892 | lr=1.00e-03 | improved | 11.7s                                                     
+Epoch 6/10 | train_loss=0.1228 | train_acc=0.9950 | test_loss=0.1064 | test_acc=0.9917 | lr=1.00e-03 | improved | 14.6s                                                     
+Epoch 8/10 | train_loss=0.0902 | train_acc=0.9964 | test_loss=0.0822 | test_acc=0.9950 | lr=1.00e-03 | improved | 11.7s                                                     
+Epoch 10/10 | train_loss=0.0697 | train_acc=0.9979 | test_loss=0.0671 | test_acc=0.9967 | lr=1.00e-03 | improved | 14.9s                                                    
+Training: 100%|█████████████████████████████████████████████████████| 10/10 [01:08<00:00,  6.82s/it, test_acc=0.9967, test_loss=0.0671, train_acc=0.9979, train_loss=0.0697]
+Restored best model from epoch 10 with test_loss=0.0671
+
+Final metrics:
+Test Loss: 0.0671
+Test Acc:  0.9967
+
+Per-class accuracy:
+Class 0 (5): 0.9930
+Class 1 (6): 1.0000
+
+Classification report:
+              precision    recall  f1-score   support
+
+           0     1.0000    0.9930    0.9965       575
+           1     0.9936    1.0000    0.9968       625
+
+    accuracy                         0.9967      1200
+   macro avg     0.9968    0.9965    0.9967      1200
+weighted avg     0.9967    0.9967    0.9967      1200
+
+
+=== Circuit diagram ===
+     ╭───────╮╭───────╮
+q0 : ┤ ry(0) ├┤ rx(0) ├
+     ╰───────╯╰───────╯
+
+
+Total training time: 68.84s

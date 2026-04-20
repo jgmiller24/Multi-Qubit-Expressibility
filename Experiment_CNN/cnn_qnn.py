@@ -44,6 +44,8 @@ from torch.autograd import Function
 from torch.utils.data import DataLoader, Dataset
 from torchvision import datasets, transforms
 
+# Visualization imports
+from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 # -----------------------------------------------------------------------------
 # Interrupt Handling Setup
 # -----------------------------------------------------------------------------
@@ -70,7 +72,8 @@ SHIFT = math.pi / 2
 # Class value presets for MNIST
 PRESETS={1: [5, 6],
          2: [3, 4, 5, 6],
-         3: [1, 2, 3, 4, 5, 6, 7, 8]}
+         3: [1, 2, 3, 4, 5, 6, 7, 8],
+         4: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
 
 # Training Hyperparameters
 TEST_SIZE_PCT = 30
@@ -782,14 +785,20 @@ class HybridQNN(nn.Module):
         quantum_feature_count = len(build_observables(qubit_count))
 
         """
-        Classical MLP encoder:
+        Classical CNN encoder:
             Maps the 28x28 image to a small vector of circuit angles.
             """
         self.classical = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(28 * 28, 128),
+            nn.Conv2d(1, 8, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.Linear(128, 32),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(8, 16, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+
+            nn.Flatten(),
+            nn.Linear(16 * 7 * 7, 32),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(32, param_count),
@@ -1245,6 +1254,9 @@ def main():
 
     # Final evaluation
     test_loss, test_acc, y_true, y_pred = evaluate(model, test_loader, history["loss_fn"])
+
+    # Visualization
+    # Streamlit?
 
     # Elapsed time calculation
     end_time = time.time()

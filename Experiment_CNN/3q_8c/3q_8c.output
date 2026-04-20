@@ -1,0 +1,110 @@
+nohup: ignoring input
+Using CUDA-Q target: qpp-cpu
+Using device: cpu
+Optimizer: AdamW
+
+Train distribution:
+Class 0 (1): 414 samples
+Class 1 (2): 342 samples
+Class 2 (3): 359 samples
+Class 3 (4): 326 samples
+Class 4 (5): 292 samples
+Class 5 (6): 343 samples
+Class 6 (7): 384 samples
+Class 7 (8): 340 samples
+
+Test distribution:
+Class 0 (1): 177 samples
+Class 1 (2): 146 samples
+Class 2 (3): 154 samples
+Class 3 (4): 140 samples
+Class 4 (5): 125 samples
+Class 5 (6): 147 samples
+Class 6 (7): 165 samples
+Class 7 (8): 146 samples
+
+=== Hybrid QNN Summary ===
+Target digits:              [1, 2, 3, 4, 5, 6, 7, 8]
+Class count:               8
+Qubit count:               3
+Circuit angles / sample:   6
+Quantum features:        8
+Entangling gates:          2
+Rotation gates:            6
+Shift:                     1.5707963267948966
+Sample count:              4000
+Test split (%):            30
+Batch size:                32
+Epochs:                    20
+Eval every:                2
+Learning rate:             0.001
+Weight decay:              0.0001
+Dropout:                   0.15
+
+--- Parameter / circuit summary ---
+Classical trainable params:        26,566
+Shared trainable quantum params:   0
+Quantum circuit angles / sample:   6
+Quantum features:                  8
+Final readout classes:             8
+Qubit count:                       3
+
+--- Quantum cost summary ---
+observe() calls / forward pass:         8
+observe() calls / backward pass:        16
+observe() calls / train batch total:    24
+Epoch 1/20 | train_loss=1.8718 | train_acc=0.3864 | test_loss=1.6215 | test_acc=0.5992 | lr=1.00e-03 | improved | 0.0s
+Epoch 2/20 | train_loss=1.5481 | train_acc=0.6389 | test_loss=1.3509 | test_acc=0.7758 | lr=1.00e-03 | improved | 68.2s
+Epoch 4/20 | train_loss=1.1347 | train_acc=0.8146 | test_loss=0.9629 | test_acc=0.8842 | lr=1.00e-03 | improved | 105.3s
+Epoch 6/20 | train_loss=0.8615 | train_acc=0.8968 | test_loss=0.7028 | test_acc=0.9400 | lr=1.00e-03 | improved | 161.3s
+Epoch 8/20 | train_loss=0.6620 | train_acc=0.9250 | test_loss=0.5420 | test_acc=0.9533 | lr=1.00e-03 | improved | 100.9s
+Epoch 10/20 | train_loss=0.5355 | train_acc=0.9418 | test_loss=0.4402 | test_acc=0.9550 | lr=1.00e-03 | improved | 117.7s
+Epoch 12/20 | train_loss=0.4407 | train_acc=0.9514 | test_loss=0.3706 | test_acc=0.9525 | lr=1.00e-03 | improved | 211.8s
+Epoch 14/20 | train_loss=0.3545 | train_acc=0.9575 | test_loss=0.2973 | test_acc=0.9633 | lr=1.00e-03 | improved | 116.9s
+Epoch 16/20 | train_loss=0.2970 | train_acc=0.9689 | test_loss=0.2568 | test_acc=0.9650 | lr=1.00e-03 | improved | 132.3s
+Epoch 18/20 | train_loss=0.2576 | train_acc=0.9725 | test_loss=0.2529 | test_acc=0.9575 | lr=1.00e-03 | improved | 130.3s
+Epoch 20/20 | train_loss=0.2182 | train_acc=0.9786 | test_loss=0.2032 | test_acc=0.9658 | lr=1.00e-03 | improved | 132.1s
+Restored best model from epoch 20 with test_loss=0.2032
+
+Final metrics:
+Test Loss: 0.2032
+Test Acc:  0.9658
+
+Per-class accuracy:
+Class 0 (1): 0.9718
+Class 1 (2): 0.9726
+Class 2 (3): 0.9805
+Class 3 (4): 0.9429
+Class 4 (5): 0.9440
+Class 5 (6): 0.9728
+Class 6 (7): 0.9818
+Class 7 (8): 0.9521
+
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.9885    0.9718    0.9801       177
+           1     0.9660    0.9726    0.9693       146
+           2     0.9437    0.9805    0.9618       154
+           3     0.9778    0.9429    0.9600       140
+           4     0.9516    0.9440    0.9478       125
+           5     0.9662    0.9728    0.9695       147
+           6     0.9643    0.9818    0.9730       165
+           7     0.9653    0.9521    0.9586       146
+
+    accuracy                         0.9658      1200
+   macro avg     0.9654    0.9648    0.9650      1200
+weighted avg     0.9660    0.9658    0.9658      1200
+
+
+=== Circuit diagram ===
+     ╭───────╮     ╭───────╮         
+q0 : ┤ ry(0) ├──●──┤ rx(0) ├─────────
+     ├───────┤╭─┴─╮╰───────╯╭───────╮
+q1 : ┤ ry(0) ├┤ x ├────●────┤ rx(0) ├
+     ├───────┤╰───╯  ╭─┴─╮  ├───────┤
+q2 : ┤ ry(0) ├───────┤ x ├──┤ rx(0) ├
+     ╰───────╯       ╰───╯  ╰───────╯
+
+
+Total training time: 1420.12s
