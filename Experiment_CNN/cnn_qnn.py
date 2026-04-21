@@ -44,8 +44,6 @@ from torch.autograd import Function
 from torch.utils.data import DataLoader, Dataset
 from torchvision import datasets, transforms
 
-# Visualization imports
-from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 # -----------------------------------------------------------------------------
 # Interrupt Handling Setup
 # -----------------------------------------------------------------------------
